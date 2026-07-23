@@ -3183,4 +3183,20 @@ if st.sidebar.button("⚠️ WIPE COCKPIT DATA & PURGE SYSTEM LOGS", type="prima
 # ==========================================
 # [PART_37_END]
 # ==========================================
+import streamlit as st
+
+# अपनी असली DB फ़ाइल का नाम यहाँ लिखें (जैसे: data.db या share_bazaar.db)
+db_name = "salasar_wealth_v19_ultimate.db" 
+
+try:
+    with open(db_name, "rb") as file:
+        st.download_button(
+            label="Get Live DB File",
+            data=file,
+            file_name=db_name,
+            mime="application/octet-stream"
+        )
+except FileNotFoundError:
+    st.error("DB फ़ाइल नहीं मिली! कृपया सही नाम लिखें।")
+
 
