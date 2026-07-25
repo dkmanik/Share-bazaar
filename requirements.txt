@@ -1,3 +1,4 @@
 streamlit
 reportlab
 openpyxl
+psycopg2-binary
