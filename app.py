@@ -230,12 +230,31 @@ def get_connection():
     # Agar app Streamlit Cloud par hai, toh Supabase use karega
     if "db_url" in st.secrets:
         import psycopg2
-        return psycopg2.connect(st.secrets["db_url"])
+        class PostgreSQLCursorWrapper:
+            def __init__(self, cursor):
+                self.cursor = cursor
+            def execute(self, query, vars=None):
+                # Yeh line pure 3300 lines ke code mein jahan bhi '?' hoga use '%s' kar degi automatically
+                query = query.replace('?', '%s')
+                return self.cursor.execute(query, vars)
+            def __getattr__(self, name):
+                return getattr(self.cursor, name)
+
+        class PostgreSQLConnectionWrapper:
+            def __init__(self, conn):
+                self.conn = conn
+            def cursor(self):
+                return PostgreSQLCursorWrapper(self.conn.cursor())
+            def __getattr__(self, name):
+                return getattr(self.conn, name)
+
+        raw_conn = psycopg2.connect(st.secrets["db_url"])
+        return PostgreSQLConnectionWrapper(raw_conn)
+        
     # Agar app aapke PC par offline chal rahi hai, toh wahi purani SQLite `.db` file chalega
     else:
         import sqlite3
         return sqlite3.connect("salasar_wealth_v19_ultimate.db")
-
 def init_db():
     pass  # Humne is function ko abhi ke liye khali chhod diya hai
     execute_database_daily_backup() # 🧑‍💻 Backup checkpoint
