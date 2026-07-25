@@ -368,22 +368,18 @@ if "github_token" in st.secrets:
 # [PART_4_START] - Operational Memory Loading & Profile Setup
 # ==========================================
     # 🔥 RE-ARRANGED ORDER: Table queries execute smoothly under single active initialization stream
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS cash_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, tx_type TEXT, amount REAL, remarks TEXT, timestamp TEXT
-        )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS operational_weeks (
-            week_name TEXT PRIMARY KEY, timestamp TEXT
-        )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS master_clients (
-            client_name TEXT PRIMARY KEY, timestamp TEXT
-        )''')
+        # Fresh connection for default operational blocks insertion matrix
+    conn = sqlite3.connect(PRIMARY_DB_NAME)
+    cursor = conn.cursor()
+    
     current_laptop_time = get_laptop_time()
     default_blocks = ["15-19 June, 2026", "22-26 June, 2026", "29 June-3 July, 2026"]
     for block in default_blocks:
         cursor.execute("INSERT OR IGNORE INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (block, current_laptop_time))
+        
+    conn.commit()
+    cursor.close()
+    conn.close()
     cursor.execute("SELECT COUNT(*) FROM master_clients")
     if cursor.fetchone()[0] == 0:
         default_clients = ['Pj Nse', 'Pj Mcx', 'Pj Sgx', 'DG001', 'Dg002', 'Dg003', 'RG', 'Master 2', 'Jitneder', 'Tony']
