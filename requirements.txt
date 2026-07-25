@@ -1,4 +1,6 @@
 streamlit
-reportlab
-openpyxl
+pandas
+numpy
 psycopg2-binary
+reportlab
+pillow
