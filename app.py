@@ -224,27 +224,55 @@ def execute_database_daily_backup():
         except Exception as e:
             print(f"Backup operation skipped/failed: {str(e)}")
 
+import os
+
+def get_connection():
+    # Agar app Streamlit Cloud par hai, toh Supabase use karega
+    if "db_url" in st.secrets:
+        import psycopg2
+        return psycopg2.connect(st.secrets["db_url"])
+    # Agar app aapke PC par offline chal rahi hai, toh wahi purani SQLite `.db` file chalega
+    else:
+        import sqlite3
+        return sqlite3.connect("salasar_wealth_v19_ultimate.db")
+
 def init_db():
-    execute_database_daily_backup() # 🔥 First execution checkpoint triggers backup save
-    conn = psycopg2.connect(st.secrets["db_url"])
+    execute_database_daily_backup() # 🧑‍💻 Backup checkpoint
+    conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('''
+    
+    # Check karte hain ki cloud database chal raha hai ya local sqlite
+    is_postgres = hasattr(conn, 'get_dsn_parameters') or 'psycopg2' in str(type(conn))
+    
+    id_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    real_type = "DOUBLE PRECISION" if is_postgres else "REAL"
+    
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS trades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
-            selected_expiry TEXT, action_type TEXT, buy_qty INTEGER, buy_price REAL, sell_qty INTEGER, sell_price REAL,
-            turnover REAL, brokerage REAL, manual_pnl REAL, status TEXT DEFAULT 'CARRY FORWARD', timestamp TEXT
-        )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS client_settings (
-            client_name TEXT PRIMARY KEY, opening_balance REAL, brokerage_nse REAL, brokerage_mcx REAL, brokerage_gifty REAL, 
-            expiry_default TEXT, expiry_optional TEXT, brokerage_type TEXT DEFAULT 'Per Crore', per_lot_rate REAL DEFAULT 0.0,
-            whatsapp_phone TEXT DEFAULT ''
-        )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS global_market_prices (
-            symbol TEXT PRIMARY KEY, closing_price REAL, updated_at TEXT
+            id {id_type},
+            client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
+            selected_expiry TEXT, action_type TEXT, buy_qty INTEGER, 
+            buy_price {real_type}, sell_qty INTEGER, sell_price {real_type},
+            turnover {real_type}, brokerage {real_type}, manual_pnl {real_type}, 
+            status TEXT DEFAULT 'CARRY FORWARD', timestamp TEXT
         )''')
         
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS client_settings (
+            client_name TEXT PRIMARY KEY, opening_balance {real_type}, 
+            brokerage_nse {real_type}, brokerage_mcx {real_type}, brokerage_gifty {real_type},
+            expiry_default TEXT, expiry_optional TEXT, brokerage_type TEXT DEFAULT 'Per Crore', 
+            per_lot_rate {real_type} DEFAULT 0.0, whatsapp_phone TEXT DEFAULT ''
+        )''')
+        
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS global_market_prices (
+            symbol TEXT PRIMARY KEY, closing_price {real_type}, updated_at TEXT
+        )''')
+        
+    conn.commit()
+    cursor.close()
+    conn.close()
     # 🔥 MULTI-MAPPING UPGRADE LAYER: Creating a separate mapping database table safely inside open connection
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sub_broker_mappings (
