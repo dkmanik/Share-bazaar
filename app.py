@@ -198,101 +198,64 @@ st.markdown("""
 # ==========================================
 # [PART_3_START] - Automated Anti-Crash Backup Engine & Initialisation Layer
 # ==========================================
-import base64
+import os
+import sqlite3
 import requests
+from datetime import datetime
 
 PRIMARY_DB_NAME = 'salasar_wealth_v19_ultimate.db'
+BUCKET_NAME = 'salasar-vault'
 
-def sync_db_with_github(action="pull"):
-    """GitHub API ke jariye database file ko auto upload (push) ya download (pull) karne ka engine."""
-    if "github_token" not in st.secrets or "github_repo" not in st.secrets:
-        print("GitHub configuration secrets are missing. Local backup mode active.")
+def sync_db_with_supabase(action="pull"):
+    """Supabase Storage se .db file ko automatic upload/download karne ka engine."""
+    if "supabase_url" not in st.secrets or "supabase_key" not in st.secrets:
         return False
-        
-    token = st.secrets["github_token"]
-    repo = st.secrets["github_repo"]
-    url = f"https://github.com{repo}/contents/{PRIMARY_DB_NAME}"
+    url = f"{st.secrets['supabase_url']}/storage/v1/object/public/{BUCKET_NAME}/{PRIMARY_DB_NAME}"
+    upload_url = f"{st.secrets['supabase_url']}/storage/v1/object/{BUCKET_NAME}/{PRIMARY_DB_NAME}"
     headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json"
+        "Authorization": f"Bearer {st.secrets['supabase_key']}",
+        "apikey": st.secrets['supabase_key']
     }
-    
     try:
-        # Check if file exists on GitHub and get its SHA
-        res = requests.get(url, headers=headers)
-        sha = None
-        current_cloud_content = None
-        if res.status_code == 200:
-            file_data = res.json()
-            sha = file_data.get("sha")
-            current_cloud_content = file_data.get("content")
-            
         if action == "pull":
-            # Cloud se data locally khinch kar laana (App Startup)
-            if res.status_code == 200 and current_cloud_content:
-                db_bytes = base64.b64decode(current_cloud_content)
+            res = requests.get(url, headers=headers)
+            if res.status_code == 200:
                 with open(PRIMARY_DB_NAME, "wb") as f:
-                    f.write(db_bytes)
-                print("Successfully pulled latest database file from GitHub cloud storage.")
+                    f.write(res.content)
+                print("Cloud Database pulled successfully on startup.")
                 return True
-                
         elif action == "push" and os.path.exists(PRIMARY_DB_NAME):
-            # Local data ko cloud par push karna (Whenever new entry is booked)
             with open(PRIMARY_DB_NAME, "rb") as f:
-                encoded_content = base64.b64encode(f.read()).decode('utf-8')
-                
-            # Content verification matrix check to avoid redundant commits
-            if current_cloud_content and current_cloud_content.replace("\n", "") == encoded_content.replace("\n", ""):
-                print("Cloud database is already up to date. Skipping commit.")
-                return True
-                
-            payload = {
-                "message": "Automated Anti-Crash Database Sync Engine Checkpoint Triggered",
-                "content": encoded_content
-            }
-            if sha:
-                payload["sha"] = sha
-                
-            put_res = requests.put(url, headers=headers, json=payload)
-            if put_res.status_code in [200, 201]:
-                print("Successfully pushed/backed up database state to GitHub repository layer.")
+                file_data = f.read()
+            headers["x-upsert"] = "true"
+            res = requests.post(upload_url, headers=headers, files={"file": (PRIMARY_DB_NAME, file_data, "application/octet-stream")})
+            if res.status_code in:
+                print("Cloud Database backed up successfully.")
                 return True
     except Exception as e:
-        print(f"Cloud GitHub Sync Matrix Exception caught: {str(e)}")
+        print(f"Supabase Storage Sync Exception: {str(e)}")
     return False
 
 def execute_database_daily_backup():
-    """Application startup par cloud backup khinchta hai aur secondary local snapshot banata hai."""
+    """Startup par cloud database load karta hai aur local snapshot backup banata hai."""
     import shutil
-    import os
-    
-    # 🧑‍💻 Sync Matrix Checkpoint Step 1: Cloud database integration pull trigger
     if "db_pulled_status" not in st.session_state:
-        sync_db_with_github(action="pull")
+        sync_db_with_supabase(action="pull")
         st.session_state["db_pulled_status"] = True
-
     if os.path.exists(PRIMARY_DB_NAME):
         try:
             current_date_str = datetime.now().strftime("%Y-%m-%d")
             backup_folder = "salasar_db_vault"
-            
             if not os.path.exists(backup_folder):
                 os.makedirs(backup_folder)
-                
             backup_filename = os.path.join(backup_folder, f"salasar_backup_{current_date_str}.db")
-            
             if not os.path.exists(backup_filename):
                 shutil.copy2(PRIMARY_DB_NAME, backup_filename)
-                
-                all_backups = sorted([os.path.join(backup_folder, f) for f in os.listdir(backup_folder) if f.endswith('.db')])
-                if len(all_backups) > 14:
-                    for old_backup_file in all_backups[:-14]:
-                        os.remove(old_backup_file)
         except Exception as e:
-            print(f"Backup operation skipped/failed: {str(e)}")
+            print(f"Backup operation failed: {str(e)}")
 
 def init_db():
-    execute_database_daily_backup() # 🔥 First execution checkpoint triggers backup save
+    execute_database_daily_backup()
     conn = sqlite3.connect(PRIMARY_DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
@@ -313,54 +276,19 @@ def init_db():
         )''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sub_broker_mappings (
-            client_name TEXT,
-            sub_broker_tag TEXT,
-            timestamp TEXT,
-            PRIMARY KEY (client_name, sub_broker_tag)
+            client_name TEXT, sub_broker_tag TEXT, timestamp TEXT, PRIMARY KEY (client_name, sub_broker_tag)
         )''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cash_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, tx_type TEXT,
             amount REAL, remarks TEXT, timestamp TEXT
         )''')
-        
-    try:
-        cursor.execute("PRAGMA table_info(master_clients)")
-        columns_mc = [c[1] for c in cursor.fetchall()]
-        if "sub_broker_tag" in columns_mc:
-            cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
-            old_rows = cursor.fetchall()
-            for c_n, sb_t, t_s in old_rows:
-                cursor.execute("INSERT OR IGNORE INTO sub_broker_mappings (client_name, sub_broker_tag, timestamp) VALUES (?, ?, ?)", (c_n, sb_t, t_s))
-    except Exception as err:
-        print(f"Migration skipped: {str(err)}")
-        
-    try:
-        cursor.execute("SELECT client_name, expiry_default FROM client_settings")
-        settings_rows = cursor.fetchall()
-        for c_profile, def_exp in settings_rows:
-            if def_exp and str(def_exp).strip():
-                cursor.execute("""
-                    UPDATE trades 
-                    SET selected_expiry = ? 
-                    WHERE client_name = ? 
-                    AND (selected_expiry IS NULL OR selected_expiry = '' OR selected_expiry = 'None' OR selected_expiry = '()')
-                """, (str(def_exp).strip(), c_profile))
-    except Exception as e: print(f"Database alignment skipped: {str(e)}")
-
-    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN brokerage_type TEXT DEFAULT 'Per Crore'")
-    except: pass
-    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN per_lot_rate REAL DEFAULT 0.0")
-    except: pass
-    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
-    except: pass
     conn.commit()
     cursor.close()
     conn.close()
 
-# 🧑‍💻 Auto-Execution Trigger Injection: Har baar jab page load ya refresh hoga toh backend auto-save trigger chalega
-if "github_token" in st.secrets:
-    sync_db_with_github(action="push")
+if "supabase_url" in st.secrets:
+    sync_db_with_supabase(action="push")
 # ==========================================
 # [PART_3_END]
 # ==========================================
