@@ -378,9 +378,7 @@ if "github_token" in st.secrets:
         cursor.execute("INSERT OR IGNORE INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (block, current_laptop_time))
         
     conn.commit()
-    cursor.close()
-    conn.close()
-    cursor.execute("SELECT COUNT(*) FROM master_clients")
+       cursor.execute("SELECT COUNT(*) FROM master_clients")
     if cursor.fetchone()[0] == 0:
         default_clients = ['Pj Nse', 'Pj Mcx', 'Pj Sgx', 'DG001', 'Dg002', 'Dg003', 'RG', 'Master 2', 'Jitneder', 'Tony']
         for client in default_clients:
