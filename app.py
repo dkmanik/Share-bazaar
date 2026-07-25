@@ -238,25 +238,33 @@ def get_connection():
 
 def init_db():
     execute_database_daily_backup() # 🧑‍💻 Backup checkpoint
-    conn = get_connection()
-    cursor = conn.cursor()
     
-    # Check karte hain ki cloud database chal raha hai ya local sqlite
+    # 1. Pehle connection lein aur type check karein
+    conn = get_connection()
     is_postgres = hasattr(conn, 'get_dsn_parameters') or 'psycopg2' in str(type(conn))
+    conn.close()
     
     id_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
     real_type = "DOUBLE PRECISION" if is_postgres else "REAL"
     
+    # 2. Trades Table
+    conn = get_connection()
+    cursor = conn.cursor()
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS trades (
-            id {id_type},
-            client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
+            id {id_type}, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
             selected_expiry TEXT, action_type TEXT, buy_qty INTEGER, 
             buy_price {real_type}, sell_qty INTEGER, sell_price {real_type},
             turnover {real_type}, brokerage {real_type}, manual_pnl {real_type}, 
             status TEXT DEFAULT 'CARRY FORWARD', timestamp TEXT
         )''')
+    conn.commit()
+    cursor.close()
+    conn.close()
         
+    # 3. Client Settings Table
+    conn = get_connection()
+    cursor = conn.cursor()
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS client_settings (
             client_name TEXT PRIMARY KEY, opening_balance {real_type}, 
@@ -264,12 +272,31 @@ def init_db():
             expiry_default TEXT, expiry_optional TEXT, brokerage_type TEXT DEFAULT 'Per Crore', 
             per_lot_rate {real_type} DEFAULT 0.0, whatsapp_phone TEXT DEFAULT ''
         )''')
+    conn.commit()
+    cursor.close()
+    conn.close()
         
+    # 4. Global Market Prices Table
+    conn = get_connection()
+    cursor = conn.cursor()
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS global_market_prices (
             symbol TEXT PRIMARY KEY, closing_price {real_type}, updated_at TEXT
         )''')
-        
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    # 5. Sub Broker Mappings Table (Jiski wajah se abhi error aaya)
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS sub_broker_mappings (
+            client_name TEXT,
+            sub_broker_tag TEXT,
+            sharing_percentage {real_type},
+            PRIMARY KEY (client_name, sub_broker_tag)
+        )''')
     conn.commit()
     cursor.close()
     conn.close()
