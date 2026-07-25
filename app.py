@@ -229,7 +229,7 @@ def sync_db_with_supabase(action="pull"):
                 file_data = f.read()
             headers["x-upsert"] = "true"
             res = requests.post(upload_url, headers=headers, files={"file": (PRIMARY_DB_NAME, file_data, "application/octet-stream")})
-            if res.status_code in:
+            if res.status_code in [200, 201]:
                 print("Cloud Database backed up successfully.")
                 return True
     except Exception as e:
