@@ -359,7 +359,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-init_db()
+#init_db()
 
 def get_global_price(symbol):
     conn = psycopg2.connect(st.secrets["db_url"])
