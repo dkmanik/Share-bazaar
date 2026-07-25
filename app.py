@@ -295,8 +295,6 @@ if "supabase_url" in st.secrets:
 # ==========================================
 # [PART_4_START] - Operational Memory Loading & Profile Setup
 # ==========================================
-    # 🔥 RE-ARRANGED ORDER: Table queries execute smoothly under single active initialization stream
-        # Fresh connection for default operational blocks insertion matrix
 conn = sqlite3.connect(PRIMARY_DB_NAME)
 cursor = conn.cursor()
 
@@ -305,16 +303,16 @@ default_blocks = ["15-19 June, 2026", "22-26 June, 2026", "29 June-3 July, 2026"
 for block in default_blocks:
     cursor.execute("INSERT OR IGNORE INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (block, current_laptop_time))
 conn.commit()
-cursor.execute("SELECT COUNT(*) FROM master_clients")
+
 cursor.execute("SELECT COUNT(*) FROM master_clients")
 if cursor.fetchone()[0] == 0:
     default_clients = ['Pj Nse', 'Pj Mcx', 'Pj Sgx', 'DG001', 'DG002', 'DG003', 'RG', 'Master 2', 'Jitneder', 'Tony']
     for client in default_clients:
         cursor.execute("INSERT OR IGNORE INTO master_clients (client_name, timestamp) VALUES (?, ?)", (client, current_laptop_time))
-    conn.close()
-init_db()
+conn.commit()
+
 def get_global_price(symbol):
-    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
+    conn = sqlite3.connect(PRIMARY_DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT closing_price FROM global_market_prices WHERE symbol = ?", (str(symbol).lower().strip(),))
     row = cursor.fetchone()
@@ -322,7 +320,7 @@ def get_global_price(symbol):
     return float(row[0]) if row and row is not None else 0.0
 
 def update_global_price(symbol, price):
-    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
+    conn = sqlite3.connect(PRIMARY_DB_NAME)
     cursor = conn.cursor()
     laptop_time = get_laptop_time()
     cursor.execute('''
@@ -334,7 +332,7 @@ def update_global_price(symbol, price):
     conn.close()
 
 def load_clients():
-    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
+    conn = sqlite3.connect(PRIMARY_DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT client_name FROM master_clients ORDER BY timestamp ASC")
     rows = cursor.fetchall()
@@ -342,7 +340,7 @@ def load_clients():
     return [str(r[0]) for r in rows] if rows else ['Pj Nse']
 
 def load_stored_weeks():
-    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
+    conn = sqlite3.connect(PRIMARY_DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT week_name FROM operational_weeks ORDER BY timestamp ASC")
     rows = cursor.fetchall()
