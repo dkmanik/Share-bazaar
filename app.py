@@ -2,7 +2,7 @@
 # [PART_1_START] - Framework Imports & Theme Styling
 # ==========================================
 import streamlit as st
-import psycopg2
+import sqlite3
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -224,129 +224,67 @@ def execute_database_daily_backup():
         except Exception as e:
             print(f"Backup operation skipped/failed: {str(e)}")
 
-import os
-
-def get_connection():
-    # Agar app Streamlit Cloud par hai, toh Supabase use karega
-    if "db_url" in st.secrets:
-        import psycopg2
-        class PostgreSQLCursorWrapper:
-            def __init__(self, cursor):
-                self.cursor = cursor
-            def execute(self, query, vars=None):
-                # Yeh line pure 3300 lines ke code mein jahan bhi '?' hoga use '%s' kar degi automatically
-                query = query.replace('?', '%s')
-                return self.cursor.execute(query, vars)
-            def __getattr__(self, name):
-                return getattr(self.cursor, name)
-
-        class PostgreSQLConnectionWrapper:
-            def __init__(self, conn):
-                self.conn = conn
-            def cursor(self):
-                return PostgreSQLCursorWrapper(self.conn.cursor())
-            def __getattr__(self, name):
-                return getattr(self.conn, name)
-
-        raw_conn = psycopg2.connect(st.secrets["db_url"])
-        return PostgreSQLConnectionWrapper(raw_conn)
-        
-    # Agar app aapke PC par offline chal rahi hai, toh wahi purani SQLite `.db` file chalega
-    else:
-        import sqlite3
-        return sqlite3.connect("salasar_wealth_v19_ultimate.db")
 def init_db():
-    pass  # Humne is function ko abhi ke liye khali chhod diya hai
-    execute_database_daily_backup() # 🧑‍💻 Backup checkpoint
-    conn = get_connection()
+    execute_database_daily_backup() # 🔥 First execution checkpoint triggers backup save
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
-    
-    # Check type (Online Supabase ya Offline SQLite)
-    is_postgres = hasattr(conn, 'get_dsn_parameters') or 'psycopg2' in str(type(conn))
-    id_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
-    real_type = "DOUBLE PRECISION" if is_postgres else "REAL"
-    param_style = "%s" if is_postgres else "?"
-    
-    # 1. Saari tables ek saath single execute mein banengi (Cash Transactions ke saath)
-    queries = f'''
-    CREATE TABLE IF NOT EXISTS trades (
-        id {id_type}, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
-        selected_expiry TEXT, action_type TEXT, buy_qty INTEGER, 
-        buy_price {real_type}, sell_qty INTEGER, sell_price {real_type},
-        turnover {real_type}, brokerage {real_type}, manual_pnl {real_type}, 
-        status TEXT DEFAULT 'CARRY FORWARD', timestamp TEXT
-    );
-    CREATE TABLE IF NOT EXISTS client_settings (
-        client_name TEXT PRIMARY KEY, opening_balance {real_type}, 
-        brokerage_nse {real_type}, brokerage_mcx {real_type}, brokerage_gifty {real_type},
-        expiry_default TEXT, expiry_optional TEXT, brokerage_type TEXT DEFAULT 'Per Crore', 
-        per_lot_rate {real_type} DEFAULT 0.0, whatsapp_phone TEXT DEFAULT ''
-    );
-    CREATE TABLE IF NOT EXISTS global_market_prices (
-        symbol TEXT PRIMARY KEY, closing_price {real_type}, updated_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS sub_broker_mappings (
-        client_name TEXT,
-        sub_broker_tag TEXT,
-        timestamp TEXT,
-        PRIMARY KEY (client_name, sub_broker_tag)
-    );
-    CREATE TABLE IF NOT EXISTS cash_transactions (
-        id {id_type},
-        client_name TEXT,
-        week_block TEXT,
-        tx_type TEXT,
-        amount {real_type},
-        remarks TEXT,
-        timestamp TEXT
-    );
-    '''
-    cursor.execute(queries)
-    conn.commit()
-
-    # 2. Automatic historical data migration matrix rule (Sirf Offline SQLite ke liye)
-    if not is_postgres:
-        try:
-            cursor.execute("PRAGMA table_info(master_clients)")
-            columns_mc = [c for c in cursor.fetchall()]
-            if "sub_broker_tag" in columns_mc:
-                cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
-                old_rows = cursor.fetchall()
-                for c_n, sb_t, t_s in old_rows:
-                    cursor.execute(f"INSERT OR IGNORE INTO sub_broker_mappings (client_name, sub_broker_tag, timestamp) VALUES ({param_style}, {param_style}, {param_style})", (c_n, sb_t, t_s))
-                conn.commit()
-        except Exception as err:
-            print(f"Migration skipped: {str(err)}")
-
-    # 3. Database Alignment Rule
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
+            selected_expiry TEXT, action_type TEXT, buy_qty INTEGER, buy_price REAL, sell_qty INTEGER, sell_price REAL,
+            turnover REAL, brokerage REAL, manual_pnl REAL, status TEXT DEFAULT 'CARRY FORWARD', timestamp TEXT
+        )''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS client_settings (
+            client_name TEXT PRIMARY KEY, opening_balance REAL, brokerage_nse REAL, brokerage_mcx REAL, brokerage_gifty REAL, 
+            expiry_default TEXT, expiry_optional TEXT, brokerage_type TEXT DEFAULT 'Per Crore', per_lot_rate REAL DEFAULT 0.0,
+            whatsapp_phone TEXT DEFAULT ''
+        )''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS global_market_prices (
+            symbol TEXT PRIMARY KEY, closing_price REAL, updated_at TEXT
+        )''')
+        
+    # 🔥 MULTI-MAPPING UPGRADE LAYER: Creating a separate mapping database table safely inside open connection
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sub_broker_mappings (
+            client_name TEXT,
+            sub_broker_tag TEXT,
+            timestamp TEXT,
+            PRIMARY KEY (client_name, sub_broker_tag)
+        )''')
+        
+    # Automatic historical data migration matrix rule
+    try:
+        cursor.execute("PRAGMA table_info(master_clients)")
+        columns_mc = [c[1] for c in cursor.fetchall()]
+        if "sub_broker_tag" in columns_mc:
+            cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
+            old_rows = cursor.fetchall()
+            for c_n, sb_t, t_s in old_rows:
+                cursor.execute("INSERT OR IGNORE INTO sub_broker_mappings (client_name, sub_broker_tag, timestamp) VALUES (?, ?, ?)", (c_n, sb_t, t_s))
+    except Exception as err:
+        print(f"Migration skipped: {str(err)}")
+        
     try:
         cursor.execute("SELECT client_name, expiry_default FROM client_settings")
         settings_rows = cursor.fetchall()
         for c_profile, def_exp in settings_rows:
             if def_exp and str(def_exp).strip():
-                cursor.execute(f"""
+                cursor.execute("""
                     UPDATE trades 
-                    SET selected_expiry = {param_style} 
-                    WHERE client_name = {param_style} 
+                    SET selected_expiry = ? 
+                    WHERE client_name = ? 
                     AND (selected_expiry IS NULL OR selected_expiry = '' OR selected_expiry = 'None' OR selected_expiry = '()')
                 """, (str(def_exp).strip(), c_profile))
-        conn.commit()
-    except Exception as e: 
-        print(f"Database alignment skipped: {str(e)}")
+    except Exception as e: print(f"Database alignment skipped: {str(e)}")
 
-    # 4. Alter columns logic (Sirf Offline SQLite ke liye)
-    if not is_postgres:
-        try: cursor.execute("ALTER TABLE client_settings ADD COLUMN brokerage_type TEXT DEFAULT 'Per Crore'")
-        except: pass
-        try: cursor.execute(f"ALTER TABLE client_settings ADD COLUMN per_lot_rate {real_type} DEFAULT 0.0")
-        except: pass
-        try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
-        except: pass
-        conn.commit()
-
-    cursor.close()
-    conn.close()
-# ==========================================
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN brokerage_type TEXT DEFAULT 'Per Crore'")
+    except: pass
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN per_lot_rate REAL DEFAULT 0.0")
+    except: pass
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
+    except: pass
 # ==========================================
 # [PART_3_END]
 # ==========================================
@@ -378,10 +316,10 @@ def init_db():
     conn.commit()
     conn.close()
 
-#init_db()
+init_db()
 
 def get_global_price(symbol):
-    conn = psycopg2.connect(st.secrets["db_url"])
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute("SELECT closing_price FROM global_market_prices WHERE symbol = ?", (str(symbol).lower().strip(),))
     row = cursor.fetchone()
@@ -389,7 +327,7 @@ def get_global_price(symbol):
     return float(row[0]) if row and row is not None else 0.0
 
 def update_global_price(symbol, price):
-    conn = psycopg2.connect(st.secrets["db_url"])
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     laptop_time = get_laptop_time()
     cursor.execute('''
@@ -401,7 +339,7 @@ def update_global_price(symbol, price):
     conn.close()
 
 def load_clients():
-    conn = psycopg2.connect(st.secrets["db_url"])
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute("SELECT client_name FROM master_clients ORDER BY timestamp ASC")
     rows = cursor.fetchall()
@@ -409,7 +347,7 @@ def load_clients():
     return [str(r[0]) for r in rows] if rows else ['Pj Nse']
 
 def load_stored_weeks():
-    conn = psycopg2.connect(st.secrets["db_url"])
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute("SELECT week_name FROM operational_weeks ORDER BY timestamp ASC")
     rows = cursor.fetchall()
@@ -437,7 +375,7 @@ active_client = st.sidebar.selectbox(
 # ==========================================
 # [PART_5_START] - Sidebar Configuration Forms & Explicit Multi-Expiry Columns Fixed
 # ==========================================
-conn = psycopg2.connect(st.secrets["db_url"])
+conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
 cursor = conn.cursor()
 # Auto-Repair Engine: Direct structural upgrades inject the missing explicit column blocks into database
 try: cursor.execute("ALTER TABLE client_settings ADD COLUMN expiry_3 TEXT DEFAULT '31-Aug-2026'")
@@ -494,7 +432,7 @@ for exp_item in [expiry_3_input, expiry_4_input, expiry_5_input]:
 whatsapp_phone_input = st.sidebar.text_input("🟢 Profile WhatsApp Number", value=str(db_phone if db_phone else ""), placeholder="e.g. 919876543210", key=f"sb_phone_{active_client}")
 
 if st.sidebar.button("💾 Save Client Configuration", use_container_width=True, key=f"sb_save_btn_{active_client}"):
-    conn = psycopg2.connect(st.secrets["db_url"])
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     
     # Save parameters normally for the selected active profile context first
@@ -541,7 +479,7 @@ new_client_inp = st.sidebar.text_input("Add New Client Name", key="nc_inp")
 if st.sidebar.button("➕ Add Client", use_container_width=True, key="add_cl_master_btn"):
     if new_client_inp.strip():
         current_laptop_time = get_laptop_time()
-        conn = psycopg2.connect(st.secrets["db_url"])
+        conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
         cursor = conn.cursor()
         try:
             cursor.execute("INSERT INTO master_clients (client_name, timestamp) VALUES (?, ?)", (new_client_inp.strip(), current_laptop_time))
@@ -671,7 +609,7 @@ del_client_select = st.sidebar.selectbox("Select Client to Delete", CLIENTS, key
 confirm_del_cl = st.sidebar.checkbox("Confirm Client Deletion", key="c_del_cl")
 if st.sidebar.button("🗑️ Delete Selected Client", use_container_width=True, type="primary", key="del_cl_master_btn"):
     if confirm_del_cl:
-        conn = psycopg2.connect(st.secrets["db_url"])
+        conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
         cursor = conn.cursor()
         cursor.execute("DELETE FROM master_clients WHERE client_name = ?", (del_client_select,))
         cursor.execute("DELETE FROM client_settings WHERE client_name = ?", (del_client_select,))
@@ -689,7 +627,7 @@ new_week_input = st.sidebar.text_input("Create New Week Name", placeholder="e.g.
 if st.sidebar.button("➕ Add Custom Week Block", use_container_width=True, key="add_wk_master_btn"):
     if new_week_input.strip():
         current_laptop_time = get_laptop_time()
-        conn = psycopg2.connect(st.secrets["db_url"])
+        conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
         cursor = conn.cursor()
         try:
             cursor.execute("INSERT INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (new_week_input.strip(), current_laptop_time))
@@ -704,7 +642,7 @@ del_week_select = st.sidebar.selectbox("Select Specific Week Block to Delete", w
 confirm_del_wk = st.sidebar.checkbox("Confirm Single Week Block Deletion", key="c_del_wk_v20")
 if st.sidebar.button("🗑️ Delete Single Selected Week Block", use_container_width=True, type="primary", key="del_single_wk_btn"):
     if confirm_del_wk:
-        conn = psycopg2.connect(st.secrets["db_url"])
+        conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
         cursor = conn.cursor()
         cursor.execute("DELETE FROM operational_weeks WHERE week_name = ?", (del_week_select,))
         cursor.execute("DELETE FROM trades WHERE week_block = ?", (del_week_select,))
@@ -719,7 +657,7 @@ st.sidebar.write("---")
 confirm_purge_wk = st.sidebar.checkbox("Confirm Purging All Weeks", key="cp_wk_chk")
 if st.sidebar.button("🗑️ Purge All Custom Week Blocks", use_container_width=True, type="primary", key="p_weeks_btn"):
     if confirm_purge_wk:
-        conn = psycopg2.connect(st.secrets["db_url"])
+        conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
         cursor = conn.cursor()
         cursor.execute("DELETE FROM operational_weeks")
         conn.commit()
@@ -734,7 +672,7 @@ if st.sidebar.button("🗑️ Purge All Custom Week Blocks", use_container_width
 # [PART_8_START] - Pure Core Structured Ledger Data Engine
 # ==========================================
 def get_client_ledger_data(client_name, week_block):
-    conn = psycopg2.connect(st.secrets["db_url"])
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute("SELECT opening_balance FROM client_settings WHERE client_name = ?", (client_name,))
     row = cursor.fetchone()
@@ -936,7 +874,7 @@ def generate_complete_historical_ledger_pdf(client_name):
     story.append(Paragraph("SALASAR WEALTH", title_style))
     story.append(Paragraph(f"<b>Statement Of Account (Historical Ledger)</b> | Client Profile: <b>{client_name.upper()}</b> | Generated On: {datetime.now().strftime('%Y-%m-%d %H:%M')}", sub_style))
     
-    conn = psycopg2.connect(st.secrets["db_url"])
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute("SELECT opening_balance FROM client_settings WHERE client_name = ?", (client_name,))
     row = cursor.fetchone()
@@ -1256,7 +1194,7 @@ def generate_only_net_positions_pdf(client_name, week_block, trades_df):
 def execute_advanced_weekly_settlement(client, current_week, target_week):
     metrics = get_client_ledger_data(client, current_week)
     pre_live_mtm = 0.0
-    conn = psycopg2.connect(st.secrets["db_url"])
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     
     cursor.execute("DELETE FROM trades WHERE client_name = ? AND week_block = ? AND status = 'CARRY FORWARD'", (client, target_week))
@@ -1685,7 +1623,7 @@ with tab1:
             live_laptop_clock_time = datetime.now().strftime("%H:%M:%S")
             custom_targeted_timestamp = f"{t_manual_date.strftime('%d-%m-%Y')} {live_laptop_clock_time}"
             
-            conn = psycopg2.connect(st.secrets["db_url"])
+            conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
             cursor = conn.cursor()
             if t_action == "BUY":
                 cursor.execute("INSERT INTO trades (client_name, week_block, exchange, script_name, selected_expiry, action_type, buy_qty, buy_price, sell_qty, sell_price, turnover, brokerage, manual_pnl, status, timestamp) VALUES (?, ?, ?, ?, ?, 'BUY', ?, ?, 0, 0.0, ?, ?, 0.0, 'CARRY FORWARD', ?)", (t_client, st.session_state['active_block'], t_exchange, t_script, t_expiry, t_qty, t_price, calc_turnover, calc_brokerage, custom_targeted_timestamp))
@@ -1724,7 +1662,7 @@ with tab2:
             live_laptop_clock_time = datetime.now().strftime("%H:%M:%S")
             custom_cash_timestamp = f"{c_manual_date.strftime('%Y-%m-%d')} {live_laptop_clock_time}"
             
-            conn = psycopg2.connect(st.secrets["db_url"])
+            conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
             cursor = conn.cursor()
             cursor.execute("INSERT INTO cash_transactions (client_name, week_block, tx_type, amount, remarks, timestamp) VALUES (?, ?, ?, ?, ?, ?)", (c_client, st.session_state['active_block'], c_type, c_amount, c_remarks, custom_cash_timestamp))
             conn.commit()
@@ -1743,7 +1681,7 @@ with tab2:
             
         cash_id = st.number_input("Enter Cash Transaction ID to Edit/Delete", min_value=1, step=1, key="cash_mod_id")
         if cash_id:
-            conn = psycopg2.connect(st.secrets["db_url"])
+            conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
             df_cash_curr = pd.read_sql_query("SELECT * FROM cash_transactions WHERE id = ?", conn, params=(cash_id,))
             conn.close()
             if not df_cash_curr.empty:
@@ -1756,7 +1694,7 @@ with tab2:
                     with bc1:
                         if st.form_submit_button("💾 Update Cash Record", use_container_width=True):
                             current_laptop_time = get_laptop_time()
-                            conn = psycopg2.connect(st.secrets["db_url"])
+                            conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
                             cursor = conn.cursor()
                             cursor.execute("UPDATE cash_transactions SET tx_type=?, amount=?, remarks=?, timestamp=? WHERE id=?", (c_type_mod, c_amt_mod, c_rem_mod, current_laptop_time, cash_id))
                             conn.commit(); conn.close(); st.success("Cash entry updated!"); st.rerun()
@@ -1764,7 +1702,7 @@ with tab2:
                         chk_del_cash = st.checkbox("Confirm Cash Entry Deletion (Safety Locked)", key=f"cdc_{cash_id}")
                         if st.form_submit_button("🗑️ Delete Cash Record", use_container_width=True, type="primary"):
                             if chk_del_cash:
-                                conn = psycopg2.connect(st.secrets["db_url"])
+                                conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
                                 cursor = conn.cursor()
                                 cursor.execute("DELETE FROM cash_transactions WHERE id = ?", (cash_id,))
                                 conn.commit(); conn.close(); st.error("Cash record deleted!"); st.rerun()
@@ -2737,7 +2675,7 @@ with tab3:
                                     calc_brokerage = sq_qty * l_rate if b_type == "Per Lot" else (calc_turnover * b_nse) / 10000000
                                         
                                     current_laptop_time = get_laptop_time()
-                                    conn = psycopg2.connect(st.secrets["db_url"])
+                                    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
                                     cursor = conn.cursor()
                                     
                                     if p['Net Qty'] > 0:
@@ -2853,7 +2791,7 @@ with tab4:
             st.warning("⚠️ Action blocked! Check rollback safety confirmation box first.")
         else:
             with st.spinner("Undoing settlement logs..."):
-                conn = psycopg2.connect(st.secrets["db_url"])
+                conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM trades WHERE week_block = ?", (rollback_target_week,))
                 cursor.execute("DELETE FROM cash_transactions WHERE remarks LIKE '%Weekly Settlement%'")
@@ -3011,7 +2949,7 @@ with tab5:
         mod_id = st.number_input("Enter exact Trade Database ID to Modify/Delete", min_value=1, step=1, key="mod_field_id_final")
         
         if mod_id:
-            conn = psycopg2.connect(st.secrets["db_url"])
+            conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
             df_curr = pd.read_sql_query("SELECT * FROM trades WHERE id = ?", conn, params=(mod_id,))
             conn.close()
             
@@ -3052,7 +2990,7 @@ with tab5:
                                 new_brokerage = (new_turnover * calc_rate_x) / 10000000
                                 
                             current_laptop_time = get_laptop_time()
-                            conn = psycopg2.connect(st.secrets["db_url"])
+                            conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
                             cursor = conn.cursor()
                             # 🔥 FIXED STATEMENT: Added selected_expiry column update handler target
                             cursor.execute("""
@@ -3063,7 +3001,7 @@ with tab5:
                         chk_del_trade = st.checkbox("Confirm Permanent Trade Deletion (Safety Locked)", key=f"tdc_{mod_id}")
                         if st.form_submit_button("🗑️ Delete This Trade Permanently", use_container_width=True, type="primary"):
                             if chk_del_trade:
-                                conn = psycopg2.connect(st.secrets["db_url"])
+                                conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
                                 cursor = conn.cursor()
                                 cursor.execute("DELETE FROM trades WHERE id = ?", (mod_id,))
                                 conn.commit(); conn.close(); st.error(f"💥 Trade ID {mod_id} Deleted!"); st.rerun()
@@ -3234,7 +3172,7 @@ st.sidebar.subheader("🚨 System Maintenance Hub")
 chk_wipe_master = st.sidebar.checkbox("Confirm Master Database Purge (Warning: Destructive)", key="m_wipe_chk")
 if st.sidebar.button("⚠️ WIPE COCKPIT DATA & PURGE SYSTEM LOGS", type="primary", use_container_width=True, key="master_wipe_db_btn"):
     if chk_wipe_master:
-        conn = psycopg2.connect(st.secrets["db_url"])
+        conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
         cursor = conn.cursor()
         cursor.execute("DELETE FROM trades")
         cursor.execute("DELETE FROM cash_transactions")
