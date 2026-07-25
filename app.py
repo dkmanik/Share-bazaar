@@ -371,13 +371,11 @@ if "github_token" in st.secrets:
         # Fresh connection for default operational blocks insertion matrix
     conn = sqlite3.connect(PRIMARY_DB_NAME)
     cursor = conn.cursor()
-    
-    current_laptop_time = get_laptop_time()
+        current_laptop_time = get_laptop_time()
     default_blocks = ["15-19 June, 2026", "22-26 June, 2026", "29 June-3 July, 2026"]
     for block in default_blocks:
         cursor.execute("INSERT OR IGNORE INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (block, current_laptop_time))
-        
-    conn.commit()
+        conn.commit()
        cursor.execute("SELECT COUNT(*) FROM master_clients")
     if cursor.fetchone()[0] == 0:
         default_clients = ['Pj Nse', 'Pj Mcx', 'Pj Sgx', 'DG001', 'Dg002', 'Dg003', 'RG', 'Master 2', 'Jitneder', 'Tony']
@@ -385,9 +383,7 @@ if "github_token" in st.secrets:
             cursor.execute("INSERT OR IGNORE INTO master_clients (client_name, timestamp) VALUES (?, ?)", (client, current_laptop_time))
     conn.commit()
     conn.close()
-
 init_db()
-
 def get_global_price(symbol):
     conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
