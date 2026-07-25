@@ -238,108 +238,86 @@ def get_connection():
 
 def init_db():
     execute_database_daily_backup() # 🧑‍💻 Backup checkpoint
-    
-    # 1. Pehle connection lein aur type check karein
     conn = get_connection()
-    is_postgres = hasattr(conn, 'get_dsn_parameters') or 'psycopg2' in str(type(conn))
-    conn.close()
+    cursor = conn.cursor()
     
+    # Check type (Online Supabase ya Offline SQLite)
+    is_postgres = hasattr(conn, 'get_dsn_parameters') or 'psycopg2' in str(type(conn))
     id_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
     real_type = "DOUBLE PRECISION" if is_postgres else "REAL"
+    param_style = "%s" if is_postgres else "?"
     
-    # 2. Trades Table
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS trades (
-            id {id_type}, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
-            selected_expiry TEXT, action_type TEXT, buy_qty INTEGER, 
-            buy_price {real_type}, sell_qty INTEGER, sell_price {real_type},
-            turnover {real_type}, brokerage {real_type}, manual_pnl {real_type}, 
-            status TEXT DEFAULT 'CARRY FORWARD', timestamp TEXT
-        )''')
+    # 1. Saari tables ek saath single execute mein banengi (Fast & Secure)
+    queries = f'''
+    CREATE TABLE IF NOT EXISTS trades (
+        id {id_type}, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
+        selected_expiry TEXT, action_type TEXT, buy_qty INTEGER, 
+        buy_price {real_type}, sell_qty INTEGER, sell_price {real_type},
+        turnover {real_type}, brokerage {real_type}, manual_pnl {real_type}, 
+        status TEXT DEFAULT 'CARRY FORWARD', timestamp TEXT
+    );
+    CREATE TABLE IF NOT EXISTS client_settings (
+        client_name TEXT PRIMARY KEY, opening_balance {real_type}, 
+        brokerage_nse {real_type}, brokerage_mcx {real_type}, brokerage_gifty {real_type},
+        expiry_default TEXT, expiry_optional TEXT, brokerage_type TEXT DEFAULT 'Per Crore', 
+        per_lot_rate {real_type} DEFAULT 0.0, whatsapp_phone TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS global_market_prices (
+        symbol TEXT PRIMARY KEY, closing_price {real_type}, updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS sub_broker_mappings (
+        client_name TEXT,
+        sub_broker_tag TEXT,
+        timestamp TEXT,
+        PRIMARY KEY (client_name, sub_broker_tag)
+    );
+    '''
+    cursor.execute(queries)
     conn.commit()
-    cursor.close()
-    conn.close()
-        
-    # 3. Client Settings Table
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS client_settings (
-            client_name TEXT PRIMARY KEY, opening_balance {real_type}, 
-            brokerage_nse {real_type}, brokerage_mcx {real_type}, brokerage_gifty {real_type},
-            expiry_default TEXT, expiry_optional TEXT, brokerage_type TEXT DEFAULT 'Per Crore', 
-            per_lot_rate {real_type} DEFAULT 0.0, whatsapp_phone TEXT DEFAULT ''
-        )''')
-    conn.commit()
-    cursor.close()
-    conn.close()
-        
-    # 4. Global Market Prices Table
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS global_market_prices (
-            symbol TEXT PRIMARY KEY, closing_price {real_type}, updated_at TEXT
-        )''')
-    conn.commit()
-    cursor.close()
-    conn.close()
 
-    # 5. Sub Broker Mappings Table (Jiski wajah se abhi error aaya)
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS sub_broker_mappings (
-            client_name TEXT,
-            sub_broker_tag TEXT,
-            sharing_percentage {real_type},
-            PRIMARY KEY (client_name, sub_broker_tag)
-        )''')
-    conn.commit()
-    cursor.close()
-    conn.close()
-    # 🔥 MULTI-MAPPING UPGRADE LAYER: Creating a separate mapping database table safely inside open connection
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sub_broker_mappings (
-            client_name TEXT,
-            sub_broker_tag TEXT,
-            timestamp TEXT,
-            PRIMARY KEY (client_name, sub_broker_tag)
-        )''')
-        
-    # Automatic historical data migration matrix rule
-    try:
-        cursor.execute("PRAGMA table_info(master_clients)")
-        columns_mc = [c[1] for c in cursor.fetchall()]
-        if "sub_broker_tag" in columns_mc:
-            cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
-            old_rows = cursor.fetchall()
-            for c_n, sb_t, t_s in old_rows:
-                cursor.execute("INSERT OR IGNORE INTO sub_broker_mappings (client_name, sub_broker_tag, timestamp) VALUES (?, ?, ?)", (c_n, sb_t, t_s))
-    except Exception as err:
-        print(f"Migration skipped: {str(err)}")
-        
+    # 2. Automatic historical data migration matrix rule (Sirf Offline SQLite ke liye)
+    if not is_postgres:
+        try:
+            cursor.execute("PRAGMA table_info(master_clients)")
+            columns_mc = [c[1] for c in cursor.fetchall()]
+            if "sub_broker_tag" in columns_mc:
+                cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
+                old_rows = cursor.fetchall()
+                for c_n, sb_t, t_s in old_rows:
+                    cursor.execute(f"INSERT OR IGNORE INTO sub_broker_mappings (client_name, sub_broker_tag, timestamp) VALUES ({param_style}, {param_style}, {param_style})", (c_n, sb_t, t_s))
+                conn.commit()
+        except Exception as err:
+            print(f"Migration skipped: {str(err)}")
+
+    # 3. Database Alignment Rule (Dono ke liye compatibility ke saath)
     try:
         cursor.execute("SELECT client_name, expiry_default FROM client_settings")
         settings_rows = cursor.fetchall()
         for c_profile, def_exp in settings_rows:
             if def_exp and str(def_exp).strip():
-                cursor.execute("""
+                cursor.execute(f"""
                     UPDATE trades 
-                    SET selected_expiry = ? 
-                    WHERE client_name = ? 
+                    SET selected_expiry = {param_style} 
+                    WHERE client_name = {param_style} 
                     AND (selected_expiry IS NULL OR selected_expiry = '' OR selected_expiry = 'None' OR selected_expiry = '()')
                 """, (str(def_exp).strip(), c_profile))
-    except Exception as e: print(f"Database alignment skipped: {str(e)}")
+        conn.commit()
+    except Exception as e: 
+        print(f"Database alignment skipped: {str(e)}")
 
-    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN brokerage_type TEXT DEFAULT 'Per Crore'")
-    except: pass
-    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN per_lot_rate REAL DEFAULT 0.0")
-    except: pass
-    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
-    except: pass
+    # 4. Alter columns logic (Sirf Offline SQLite ke liye zaroori hai, Cloud par tables fresh hain toh pehle se columns hain)
+    if not is_postgres:
+        try: cursor.execute("ALTER TABLE client_settings ADD COLUMN brokerage_type TEXT DEFAULT 'Per Crore'")
+        except: pass
+        try: cursor.execute(f"ALTER TABLE client_settings ADD COLUMN per_lot_rate {real_type} DEFAULT 0.0")
+        except: pass
+        try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
+        except: pass
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+# ==========================================
 # ==========================================
 # [PART_3_END]
 # ==========================================
