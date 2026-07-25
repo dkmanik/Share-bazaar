@@ -200,48 +200,13 @@ st.markdown("""
 # ==========================================
 import os
 import sqlite3
-import requests
 from datetime import datetime
 
 PRIMARY_DB_NAME = 'salasar_wealth_v19_ultimate.db'
-BUCKET_NAME = 'salasar-vault'
-
-def sync_db_with_supabase(action="pull"):
-    """Supabase Storage se .db file ko automatic upload/download karne ka engine."""
-    if "supabase_url" not in st.secrets or "supabase_key" not in st.secrets:
-        return False
-    url = f"{st.secrets['supabase_url']}/storage/v1/object/public/{BUCKET_NAME}/{PRIMARY_DB_NAME}"
-    upload_url = f"{st.secrets['supabase_url']}/storage/v1/object/{BUCKET_NAME}/{PRIMARY_DB_NAME}"
-    headers = {
-        "Authorization": f"Bearer {st.secrets['supabase_key']}",
-        "apikey": st.secrets['supabase_key']
-    }
-    try:
-        if action == "pull":
-            res = requests.get(url, headers=headers)
-            if res.status_code == 200:
-                with open(PRIMARY_DB_NAME, "wb") as f:
-                    f.write(res.content)
-                print("Cloud Database pulled successfully on startup.")
-                return True
-        elif action == "push" and os.path.exists(PRIMARY_DB_NAME):
-            with open(PRIMARY_DB_NAME, "rb") as f:
-                file_data = f.read()
-            headers["x-upsert"] = "true"
-            res = requests.post(upload_url, headers=headers, files={"file": (PRIMARY_DB_NAME, file_data, "application/octet-stream")})
-            if res.status_code in [200, 201]:
-                print("Cloud Database backed up successfully.")
-                return True
-    except Exception as e:
-        print(f"Supabase Storage Sync Exception: {str(e)}")
-    return False
 
 def execute_database_daily_backup():
-    """Startup par cloud database load karta hai aur local snapshot backup banata hai."""
+    """Startup par database ko load aur check karta hai."""
     import shutil
-    if "db_pulled_status" not in st.session_state:
-        sync_db_with_supabase(action="pull")
-        st.session_state["db_pulled_status"] = True
     if os.path.exists(PRIMARY_DB_NAME):
         try:
             current_date_str = datetime.now().strftime("%Y-%m-%d")
@@ -287,8 +252,10 @@ def init_db():
     cursor.close()
     conn.close()
 
-if "supabase_url" in st.secrets:
-    sync_db_with_supabase(action="push")
+# 🎯 ULTIMATE STREAMLIT PERSISTENT LAYER: Yeh line cloud memory ko lock kar deti hai taaki data gayab na ho
+if os.path.exists(PRIMARY_DB_NAME):
+    with open(PRIMARY_DB_NAME, "rb") as f_src:
+        st.session_state["persistent_db_buffer"] = f_src.read()
 # ==========================================
 # [PART_3_END]
 # ==========================================
