@@ -198,13 +198,80 @@ st.markdown("""
 # ==========================================
 # [PART_3_START] - Automated Anti-Crash Backup Engine & Initialisation Layer
 # ==========================================
+import base64
+import requests
+
+PRIMARY_DB_NAME = 'salasar_wealth_v19_ultimate.db'
+
+def sync_db_with_github(action="pull"):
+    """GitHub API ke jariye database file ko auto upload (push) ya download (pull) karne ka engine."""
+    if "github_token" not in st.secrets or "github_repo" not in st.secrets:
+        print("GitHub configuration secrets are missing. Local backup mode active.")
+        return False
+        
+    token = st.secrets["github_token"]
+    repo = st.secrets["github_repo"]
+    url = f"https://github.com{repo}/contents/{PRIMARY_DB_NAME}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    try:
+        # Check if file exists on GitHub and get its SHA
+        res = requests.get(url, headers=headers)
+        sha = None
+        current_cloud_content = None
+        if res.status_code == 200:
+            file_data = res.json()
+            sha = file_data.get("sha")
+            current_cloud_content = file_data.get("content")
+            
+        if action == "pull":
+            # Cloud se data locally khinch kar laana (App Startup)
+            if res.status_code == 200 and current_cloud_content:
+                db_bytes = base64.b64decode(current_cloud_content)
+                with open(PRIMARY_DB_NAME, "wb") as f:
+                    f.write(db_bytes)
+                print("Successfully pulled latest database file from GitHub cloud storage.")
+                return True
+                
+        elif action == "push" and os.path.exists(PRIMARY_DB_NAME):
+            # Local data ko cloud par push karna (Whenever new entry is booked)
+            with open(PRIMARY_DB_NAME, "rb") as f:
+                encoded_content = base64.b64encode(f.read()).decode('utf-8')
+                
+            # Content verification matrix check to avoid redundant commits
+            if current_cloud_content and current_cloud_content.replace("\n", "") == encoded_content.replace("\n", ""):
+                print("Cloud database is already up to date. Skipping commit.")
+                return True
+                
+            payload = {
+                "message": "Automated Anti-Crash Database Sync Engine Checkpoint Triggered",
+                "content": encoded_content
+            }
+            if sha:
+                payload["sha"] = sha
+                
+            put_res = requests.put(url, headers=headers, json=payload)
+            if put_res.status_code in:
+                print("Successfully pushed/backed up database state to GitHub repository layer.")
+                return True
+    except Exception as e:
+        print(f"Cloud GitHub Sync Matrix Exception caught: {str(e)}")
+    return False
+
 def execute_database_daily_backup():
-    """Yeh function application startup par pichli database file ka local automatic backup banata hai."""
+    """Application startup par cloud backup khinchta hai aur secondary local snapshot banata hai."""
     import shutil
     import os
-    primary_db_name = 'salasar_wealth_v19_ultimate.db'
     
-    if os.path.exists(primary_db_name):
+    # 🧑‍💻 Sync Matrix Checkpoint Step 1: Cloud database integration pull trigger
+    if "db_pulled_status" not in st.session_state:
+        sync_db_with_github(action="pull")
+        st.session_state["db_pulled_status"] = True
+
+    if os.path.exists(PRIMARY_DB_NAME):
         try:
             current_date_str = datetime.now().strftime("%Y-%m-%d")
             backup_folder = "salasar_db_vault"
@@ -215,7 +282,7 @@ def execute_database_daily_backup():
             backup_filename = os.path.join(backup_folder, f"salasar_backup_{current_date_str}.db")
             
             if not os.path.exists(backup_filename):
-                shutil.copy2(primary_db_name, backup_filename)
+                shutil.copy2(PRIMARY_DB_NAME, backup_filename)
                 
                 all_backups = sorted([os.path.join(backup_folder, f) for f in os.listdir(backup_folder) if f.endswith('.db')])
                 if len(all_backups) > 14:
@@ -226,7 +293,7 @@ def execute_database_daily_backup():
 
 def init_db():
     execute_database_daily_backup() # 🔥 First execution checkpoint triggers backup save
-    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
+    conn = sqlite3.connect(PRIMARY_DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
@@ -244,8 +311,6 @@ def init_db():
         CREATE TABLE IF NOT EXISTS global_market_prices (
             symbol TEXT PRIMARY KEY, closing_price REAL, updated_at TEXT
         )''')
-        
-    # 🔥 MULTI-MAPPING UPGRADE LAYER: Creating a separate mapping database table safely inside open connection
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sub_broker_mappings (
             client_name TEXT,
@@ -253,8 +318,12 @@ def init_db():
             timestamp TEXT,
             PRIMARY KEY (client_name, sub_broker_tag)
         )''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cash_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, tx_type TEXT,
+            amount REAL, remarks TEXT, timestamp TEXT
+        )''')
         
-    # Automatic historical data migration matrix rule
     try:
         cursor.execute("PRAGMA table_info(master_clients)")
         columns_mc = [c[1] for c in cursor.fetchall()]
@@ -285,6 +354,13 @@ def init_db():
     except: pass
     try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
     except: pass
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+# 🧑‍💻 Auto-Execution Trigger Injection: Har baar jab page load ya refresh hoga toh backend auto-save trigger chalega
+if "github_token" in st.secrets:
+    sync_db_with_github(action="push")
 # ==========================================
 # [PART_3_END]
 # ==========================================
