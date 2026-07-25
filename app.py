@@ -247,7 +247,7 @@ def init_db():
     real_type = "DOUBLE PRECISION" if is_postgres else "REAL"
     param_style = "%s" if is_postgres else "?"
     
-    # 1. Saari tables ek saath single execute mein banengi (Fast & Secure)
+    # 1. Saari tables ek saath single execute mein banengi (Cash Transactions ke saath)
     queries = f'''
     CREATE TABLE IF NOT EXISTS trades (
         id {id_type}, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
@@ -271,6 +271,15 @@ def init_db():
         timestamp TEXT,
         PRIMARY KEY (client_name, sub_broker_tag)
     );
+    CREATE TABLE IF NOT EXISTS cash_transactions (
+        id {id_type},
+        client_name TEXT,
+        week_block TEXT,
+        tx_type TEXT,
+        amount {real_type},
+        remarks TEXT,
+        timestamp TEXT
+    );
     '''
     cursor.execute(queries)
     conn.commit()
@@ -279,7 +288,7 @@ def init_db():
     if not is_postgres:
         try:
             cursor.execute("PRAGMA table_info(master_clients)")
-            columns_mc = [c[1] for c in cursor.fetchall()]
+            columns_mc = [c for c in cursor.fetchall()]
             if "sub_broker_tag" in columns_mc:
                 cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
                 old_rows = cursor.fetchall()
@@ -289,7 +298,7 @@ def init_db():
         except Exception as err:
             print(f"Migration skipped: {str(err)}")
 
-    # 3. Database Alignment Rule (Dono ke liye compatibility ke saath)
+    # 3. Database Alignment Rule
     try:
         cursor.execute("SELECT client_name, expiry_default FROM client_settings")
         settings_rows = cursor.fetchall()
@@ -305,7 +314,7 @@ def init_db():
     except Exception as e: 
         print(f"Database alignment skipped: {str(e)}")
 
-    # 4. Alter columns logic (Sirf Offline SQLite ke liye zaroori hai, Cloud par tables fresh hain toh pehle se columns hain)
+    # 4. Alter columns logic (Sirf Offline SQLite ke liye)
     if not is_postgres:
         try: cursor.execute("ALTER TABLE client_settings ADD COLUMN brokerage_type TEXT DEFAULT 'Per Crore'")
         except: pass
