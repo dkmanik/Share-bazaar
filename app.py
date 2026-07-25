@@ -237,6 +237,7 @@ def get_connection():
         return sqlite3.connect("salasar_wealth_v19_ultimate.db")
 
 def init_db():
+    pass  # Humne is function ko abhi ke liye khali chhod diya hai
     execute_database_daily_backup() # 🧑‍💻 Backup checkpoint
     conn = get_connection()
     cursor = conn.cursor()
