@@ -254,7 +254,7 @@ def sync_db_with_github(action="pull"):
                 payload["sha"] = sha
                 
             put_res = requests.put(url, headers=headers, json=payload)
-            if put_res.status_code in: [200, 201]:
+            if put_res.status_code in [200, 201]:
                 print("Successfully pushed/backed up database state to GitHub repository layer.")
                 return True
     except Exception as e:
