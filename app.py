@@ -198,30 +198,35 @@ st.markdown("""
 # ==========================================
 # [PART_3_START] - Automated Anti-Crash Backup Engine & Initialisation Layer
 # ==========================================
-import os
-import sqlite3
-from datetime import datetime
-
-PRIMARY_DB_NAME = 'salasar_wealth_v19_ultimate.db'
-
 def execute_database_daily_backup():
-    """Startup par database ko load aur check karta hai."""
+    """Yeh function application startup par pichli database file ka local automatic backup banata hai."""
     import shutil
-    if os.path.exists(PRIMARY_DB_NAME):
+    import os
+    primary_db_name = 'salasar_wealth_v19_ultimate.db'
+    
+    if os.path.exists(primary_db_name):
         try:
             current_date_str = datetime.now().strftime("%Y-%m-%d")
             backup_folder = "salasar_db_vault"
+            
             if not os.path.exists(backup_folder):
                 os.makedirs(backup_folder)
+                
             backup_filename = os.path.join(backup_folder, f"salasar_backup_{current_date_str}.db")
+            
             if not os.path.exists(backup_filename):
-                shutil.copy2(PRIMARY_DB_NAME, backup_filename)
+                shutil.copy2(primary_db_name, backup_filename)
+                
+                all_backups = sorted([os.path.join(backup_folder, f) for f in os.listdir(backup_folder) if f.endswith('.db')])
+                if len(all_backups) > 14:
+                    for old_backup_file in all_backups[:-14]:
+                        os.remove(old_backup_file)
         except Exception as e:
-            print(f"Backup operation failed: {str(e)}")
+            print(f"Backup operation skipped/failed: {str(e)}")
 
 def init_db():
-    execute_database_daily_backup()
-    conn = sqlite3.connect(PRIMARY_DB_NAME)
+    execute_database_daily_backup() # 🔥 First execution checkpoint triggers backup save
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
@@ -239,47 +244,82 @@ def init_db():
         CREATE TABLE IF NOT EXISTS global_market_prices (
             symbol TEXT PRIMARY KEY, closing_price REAL, updated_at TEXT
         )''')
+        
+    # 🔥 MULTI-MAPPING UPGRADE LAYER: Creating a separate mapping database table safely inside open connection
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sub_broker_mappings (
-            client_name TEXT, sub_broker_tag TEXT, timestamp TEXT, PRIMARY KEY (client_name, sub_broker_tag)
+            client_name TEXT,
+            sub_broker_tag TEXT,
+            timestamp TEXT,
+            PRIMARY KEY (client_name, sub_broker_tag)
         )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS cash_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, tx_type TEXT,
-            amount REAL, remarks TEXT, timestamp TEXT
-        )''')
-    conn.commit()
-    cursor.close()
-    conn.close()
+        
+    # Automatic historical data migration matrix rule
+    try:
+        cursor.execute("PRAGMA table_info(master_clients)")
+        columns_mc = [c[1] for c in cursor.fetchall()]
+        if "sub_broker_tag" in columns_mc:
+            cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
+            old_rows = cursor.fetchall()
+            for c_n, sb_t, t_s in old_rows:
+                cursor.execute("INSERT OR IGNORE INTO sub_broker_mappings (client_name, sub_broker_tag, timestamp) VALUES (?, ?, ?)", (c_n, sb_t, t_s))
+    except Exception as err:
+        print(f"Migration skipped: {str(err)}")
+        
+    try:
+        cursor.execute("SELECT client_name, expiry_default FROM client_settings")
+        settings_rows = cursor.fetchall()
+        for c_profile, def_exp in settings_rows:
+            if def_exp and str(def_exp).strip():
+                cursor.execute("""
+                    UPDATE trades 
+                    SET selected_expiry = ? 
+                    WHERE client_name = ? 
+                    AND (selected_expiry IS NULL OR selected_expiry = '' OR selected_expiry = 'None' OR selected_expiry = '()')
+                """, (str(def_exp).strip(), c_profile))
+    except Exception as e: print(f"Database alignment skipped: {str(e)}")
 
-# 🎯 ULTIMATE STREAMLIT PERSISTENT LAYER: Yeh line cloud memory ko lock kar deti hai taaki data gayab na ho
-if os.path.exists(PRIMARY_DB_NAME):
-    with open(PRIMARY_DB_NAME, "rb") as f_src:
-        st.session_state["persistent_db_buffer"] = f_src.read()
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN brokerage_type TEXT DEFAULT 'Per Crore'")
+    except: pass
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN per_lot_rate REAL DEFAULT 0.0")
+    except: pass
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
+    except: pass
 # ==========================================
 # [PART_3_END]
 # ==========================================
 # ==========================================
 # [PART_4_START] - Operational Memory Loading & Profile Setup
 # ==========================================
-conn = sqlite3.connect(PRIMARY_DB_NAME)
-cursor = conn.cursor()
+    # 🔥 RE-ARRANGED ORDER: Table queries execute smoothly under single active initialization stream
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cash_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, tx_type TEXT, amount REAL, remarks TEXT, timestamp TEXT
+        )''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS operational_weeks (
+            week_name TEXT PRIMARY KEY, timestamp TEXT
+        )''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS master_clients (
+            client_name TEXT PRIMARY KEY, timestamp TEXT
+        )''')
+    current_laptop_time = get_laptop_time()
+    default_blocks = ["15-19 June, 2026", "22-26 June, 2026", "29 June-3 July, 2026"]
+    for block in default_blocks:
+        cursor.execute("INSERT OR IGNORE INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (block, current_laptop_time))
+    cursor.execute("SELECT COUNT(*) FROM master_clients")
+    if cursor.fetchone()[0] == 0:
+        default_clients = ['Pj Nse', 'Pj Mcx', 'Pj Sgx', 'DG001', 'Dg002', 'Dg003', 'RG', 'Master 2', 'Jitneder', 'Tony']
+        for client in default_clients:
+            cursor.execute("INSERT OR IGNORE INTO master_clients (client_name, timestamp) VALUES (?, ?)", (client, current_laptop_time))
+    conn.commit()
+    conn.close()
 
-current_laptop_time = get_laptop_time()
-default_blocks = ["15-19 June, 2026", "22-26 June, 2026", "29 June-3 July, 2026"]
-for block in default_blocks:
-    cursor.execute("INSERT OR IGNORE INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (block, current_laptop_time))
-conn.commit()
-
-cursor.execute("SELECT COUNT(*) FROM master_clients")
-if cursor.fetchone()[0] == 0:
-    default_clients = ['Pj Nse', 'Pj Mcx', 'Pj Sgx', 'DG001', 'DG002', 'DG003', 'RG', 'Master 2', 'Jitneder', 'Tony']
-    for client in default_clients:
-        cursor.execute("INSERT OR IGNORE INTO master_clients (client_name, timestamp) VALUES (?, ?)", (client, current_laptop_time))
-conn.commit()
+init_db()
 
 def get_global_price(symbol):
-    conn = sqlite3.connect(PRIMARY_DB_NAME)
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute("SELECT closing_price FROM global_market_prices WHERE symbol = ?", (str(symbol).lower().strip(),))
     row = cursor.fetchone()
@@ -287,7 +327,7 @@ def get_global_price(symbol):
     return float(row[0]) if row and row is not None else 0.0
 
 def update_global_price(symbol, price):
-    conn = sqlite3.connect(PRIMARY_DB_NAME)
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     laptop_time = get_laptop_time()
     cursor.execute('''
@@ -299,7 +339,7 @@ def update_global_price(symbol, price):
     conn.close()
 
 def load_clients():
-    conn = sqlite3.connect(PRIMARY_DB_NAME)
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute("SELECT client_name FROM master_clients ORDER BY timestamp ASC")
     rows = cursor.fetchall()
@@ -307,7 +347,7 @@ def load_clients():
     return [str(r[0]) for r in rows] if rows else ['Pj Nse']
 
 def load_stored_weeks():
-    conn = sqlite3.connect(PRIMARY_DB_NAME)
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
     cursor.execute("SELECT week_name FROM operational_weeks ORDER BY timestamp ASC")
     rows = cursor.fetchall()
@@ -1400,8 +1440,9 @@ st.write("---")
 # ==========================================
 # [PART_18_END]
 # ==========================================
+
 # ==========================================
-# [PART_19_START] - Smart Calendar Sync Engine & Layout Setup
+# [PART_19_START] - Smart Calendar Sync Engine & Layout Setup (100% BOUNDARY CRASH FIX)
 # ==========================================
 if 'active_block' not in st.session_state or st.session_state.get('global_week_selector_fixed') is None:
     default_week_idx = 0
@@ -1410,50 +1451,70 @@ if 'active_block' not in st.session_state or st.session_state.get('global_week_s
         current_date_obj = datetime.strptime(get_laptop_time(), "%Y-%m-%d %H:%M:%S").date()
         current_year_str = str(current_date_obj.year)
         
-        # Months dictionary lookup to convert short name labels
         months_lookup_dict = {
             "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, 
             "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
         }
         
-        # Operational weeks array matrix ko loop chala kar check karein
+        # Symmetrical match score mechanism to trace optimal active week block
+        best_match_idx = 0
+        min_date_distance = 99999
+        
         for idx, week_str in enumerate(week_options):
-            if current_year_str in week_str:
-                clean_week_line = str(week_str).lower().strip()
+            clean_week_line = str(week_str).lower().strip()
+            
+            # Agar string me chal rha year nhi h to parsing skip krein
+            if current_year_str not in clean_week_line:
+                continue
                 
-                # Slicing pattern to extract month names dynamically (e.g., "15-19 june, 2026" or "6-10 july, 2026")
-                detected_month_num = 6 # Default fallback to June
-                for month_key, month_val in months_lookup_dict.items():
-                    if month_key in clean_week_line:
-                        detected_month_num = month_val
-                        break
+            # Month tags extract karne ki solid parsing matrix
+            detected_months = []
+            for month_key, month_val in months_lookup_dict.items():
+                if month_key in clean_week_line:
+                    # Jis sequence me months text me aayenge unhe save karenge
+                    detected_months.append((clean_week_line.find(month_key), month_val))
+            
+            # Sort detected months by their position in string appearance
+            detected_months.sort()
+            month_sequence = [m[1] for m in detected_months]
+            
+            # Extraction of pure digit tokens
+            import re
+            digit_tokens = [int(s) for s in re.findall(r'\d+', clean_week_line) if int(s) < 32]
+            
+            if len(digit_tokens) >= 2 and len(month_sequence) > 0:
+                start_day_digit = digit_tokens[0]
+                end_day_digit = digit_tokens[1]
                 
-                # Raw numbers numbers extraction sequence
-                tokens_split = clean_week_line.split(",")
-                date_range_part = tokens_split[0].strip() # e.g. "15-19 june" or "29 june-3 july" or "6-10 july"
+                start_month_num = month_sequence[0]
+                # Cross-month handling layer (e.g. "29 June - 3 July")
+                end_month_num = month_sequence[1] if len(month_sequence) > 1 else month_sequence[0]
                 
-                # Dash line matrix pattern identification
-                if "-" in date_range_part:
-                    dash_tokens = date_range_part.split("-")
-                    start_day_digit = int("".join([c for c in dash_tokens[0] if c.isdigit()]))
+                try:
+                    week_start_boundary = datetime(current_date_obj.year, start_month_num, start_day_digit).date()
+                    week_end_boundary = datetime(current_date_obj.year, end_month_num, end_day_digit).date()
                     
-                    # Split further to check cross-month boundary loops (e.g. "29 june-3 july")
-                    end_part_raw = dash_tokens[1].strip()
-                    end_day_digit = int("".join([c for c in end_part_raw if c.isdigit()]))
+                    # Buffer extensions to perfectly cover weekends alignment adjustments
+                    extended_start = week_start_boundary - timedelta(days=2)
+                    extended_end = week_end_boundary + timedelta(days=2)
                     
-                    # Create perfect datetime object comparison boundaries
-                    week_start_boundary = datetime(current_date_obj.year, detected_month_num, start_day_digit).date()
-                    
-                    # Safe handling wrapper for cross-month boundary constraints
-                    if "july" in end_part_raw and "june" in clean_week_line:
-                        week_end_boundary = datetime(current_date_obj.year, 7, end_day_digit).date() + timedelta(days=2)
-                    else:
-                        week_end_boundary = datetime(current_date_obj.year, detected_month_num, end_day_digit).date() + timedelta(days=2)
-                    
-                    # 🔥 LIVE SYNCHRONIZATION DETECTOR MATRIX: Lock matching row index immediately
-                    if week_start_boundary - timedelta(days=2) <= current_date_obj <= week_end_boundary:
+                    # 🔥 LIVE AUTOMATIC CURRENT WEEK CAPTURE DETECTOR
+                    if extended_start <= current_date_obj <= extended_end:
                         default_week_idx = idx
                         break
+                        
+                    # Target fallback: find the mathematically closest week block index
+                    mid_week_point = week_start_boundary + timedelta(days=2)
+                    day_delta_distance = abs((current_date_obj - mid_week_point).days)
+                    if day_delta_distance < min_date_distance:
+                        min_date_distance = day_delta_distance
+                        best_match_idx = idx
+                except Exception:
+                    continue
+        else:
+            # Match condition fallback matrix trigger
+            default_week_idx = best_match_idx
+            
     except Exception:
         default_week_idx = 0
         
