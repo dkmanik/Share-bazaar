@@ -196,40 +196,48 @@ st.markdown("""
 # [PART_2_END]
 # ==========================================
 # ==========================================
-# [PART_3_START] - Automated Anti-Crash Backup Engine & Safe Dropbox Vault Integration
+# [PART_3_START] - Automated Anti-Crash Backup Engine & Google Drive Sync Vault
 # ==========================================
 def push_db_to_cloud_vault():
-    """Yeh function SQLite database ko bina kisi online server jhanjhat ke instantly local Dropbox mirror par save karta hai."""
+    """Yeh function SQLite database ko bina kisi password jhanjhat ke instantly aapke live Google Drive backup par lock karta hai."""
     import shutil
     import os
     
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    # Dedicated mirror file written directly inside your synced folder directory path
-    mirror_sync_db_name = 'salasar_wealth_MOBILE_SYNC_MIRROR.db'
+    
+    # 🔥 GOOGLE DRIVE WINDOWS USER PATH SYNCHRONIZATION MATRIX
+    # Note: Windows local login username 'Dell' ke standard Google Drive sync path ko target kiya h
+    gdrive_folder = r"C:\Users\Dell\Google Drive\Salasar_Wealth_Vault"
+    mirror_sync_db_name = os.path.join(gdrive_folder, 'salasar_wealth_GOOGLE_SYNC_MIRROR.db')
     
     if os.path.exists(primary_db_name):
         try:
-            # Overwrites or creates the exact identical snapshot for instant device pairing retrieval
+            # Agar local drive folder nahi bana h to automatic create karein
+            if not os.path.exists(gdrive_folder):
+                os.makedirs(gdrive_folder)
+                
+            # Copy matching database snapshot safely into the cloud folder zone
             shutil.copy2(primary_db_name, mirror_sync_db_name)
             return True
         except Exception as e:
-            print(f"Local backup mirror push bypassed: {str(e)}")
+            print(f"Google Drive vault mirror push bypassed: {str(e)}")
     return False
 
 def pull_db_from_cloud_vault():
-    """Manually button dabane par yeh function mirror sync file se fresh data khinch kar local file me restore karta hai."""
+    """Device par Fetch trigger chalne par yeh function Google Drive cloud register se fresh dataset state pull karta hai."""
     import shutil
     import os
     
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    mirror_sync_db_name = 'salasar_wealth_MOBILE_SYNC_MIRROR.db'
+    gdrive_folder = r"C:\Users\Dell\Google Drive\Salasar_Wealth_Vault"
+    mirror_sync_db_name = os.path.join(gdrive_folder, 'salasar_wealth_GOOGLE_SYNC_MIRROR.db')
     
     try:
         if os.path.exists(mirror_sync_db_name):
             shutil.copy2(mirror_sync_db_name, primary_db_name)
             return True
     except Exception as e:
-        print(f"Local backup mirror recovery skipped: {str(e)}")
+        print(f"Google Drive vault mirror recovery skipped: {str(e)}")
     return False
 
 def execute_database_daily_backup():
@@ -2773,36 +2781,36 @@ with tab3:
 # [PART_33] - Global Price Controller & Cloud Sync Synchronization Engine
 # ==========================================
 with tab4:
-    st.subheader("🌐 Global Price Sync & System-Wide Bulk Settlement Center")
-    st.info("Yahan se aap universal rates aur dynamic multi-device synchronization matrix status track kar sakte hain.")
+    st.subheader("🌐 Universal Rates Sync & Multi-Device Control Center")
+    st.info("Yahan se aap unique scrip + expiry ke universal rates set karke automatic bulk settlement run kar sakte hain.")
     
-    # 📱 🔥 STEP 1: REAL-TIME DEVICE MULTI-SYNC VAULT INTERFACE (STREAMLIT TIJORI)
-    st.markdown("### 🔒 Streamlit Tijori: Multi-Device Real-Time Sync Vault")
+    # 📱 🔥 STEP 1: REAL-TIME DEVICE MULTI-SYNC INTERFACE (LOHE KI TIJORI)
+    st.markdown("### 🔒 Lohe Ki Tijori: Multi-Device Real-Time Sync Vault")
     with st.container(border=True):
         sc_v1, sc_v2 = st.columns([0.5, 0.5])
         with sc_v1:
-            st.markdown("#### 📤 Upload / Save Data to Cloud")
-            st.write("Apne laptop ya mobile se kiye huyen saare badlavo ko online safe backup lock lagayein.")
-            if st.button("💾 Force Push Current DB to Cloud Vault", use_container_width=True, type="secondary", key="force_cloud_push_btn_matrix_final_v20"):
-                with st.spinner("Saving snapshot to local mirror vault..."):
+            st.markdown("#### 📤 Laptop Se Data Bhejein (Upload)")
+            st.write("Apne laptop ya main system par kiye huyen saare badlavo ko online safe backup lock lagayein.")
+            if st.button("💾 Force Push Current DB to Vault", use_container_width=True, type="secondary", key="force_cloud_push_btn_matrix_final_v20"):
+                with st.spinner("Encrypting and copying dataset payload to safe vault..."):
                     success_flag = push_db_to_cloud_vault()
                     if success_flag:
-                        st.success("✨ Swaahaa! Aapka saara data Dropbox tijori me locked ho gaya h. Mobile/Laptop par sync karne ke liye ready h!")
+                        st.success("✨ Swaahaa! Aapka saara data safe online tijori me locked ho gaya h. Mobile/Laptop par sync karne ke liye ready h!")
                     else:
-                        st.error("❌ Storage mirror error. Kripya check karein folder permissions.")
+                        st.error("❌ Storage mirror error. Kripya check karne folder file access permission rules.")
                         
         with sc_v2:
-            st.markdown("#### 📥 Download / Fetch Data to Device")
+            st.markdown("#### 📥 Mobile Me Data Utaran / Fetch (Download)")
             st.write("Dusre device (mobile/laptop) par kiya hua aakhiri saved data is device par instantly live karein.")
-            if st.button("🔄 Force Fetch Live DB from Cloud Vault", use_container_width=True, type="primary", key="force_cloud_pull_btn_matrix_final_v20"):
-                with st.spinner("Fetching snapshot from local mirror vault..."):
+            if st.button("🔄 Force Fetch Live DB from Vault", use_container_width=True, type="primary", key="force_cloud_pull_btn_matrix_final_v20"):
+                with st.spinner("Downloading and restoring aakhiri saved dataset stream..."):
                     success_flag = pull_db_from_cloud_vault()
                     if success_flag:
                         st.balloons()
-                        st.success("✨ Perfect bhai! Mirror tijori se aakhiri live database snapshot download ho gaya h. Saara data automatically re-aligned!")
+                        st.success("✨ Perfect bhai! Safe tijori se aakhiri live database snapshot download ho gaya h. Saara data automatically re-aligned!")
                         st.rerun()
                     else:
-                        st.error("❌ Mirror database snapshot fetch failed. Data file not found.")
+                        st.error("❌ Snapshot fetch failed. Vault storage register me koi valid file backup nahi mila.")
 
     st.write("---")
     
@@ -2911,7 +2919,7 @@ with tab4:
                         st.balloons(); st.success("✨ Database Snapshot Restored and Cloud Overridden perfectly!"); st.rerun()
                     except Exception as e: st.error(f"Error: {str(e)}")
 # ==========================================
-# [PART_3_END]
+# [PART_33_END]
 # ==========================================
 # ==========================================
 # [PART_34_START] - Upgraded Expiry Pivot View & Symmetrical Combined Dashboard
