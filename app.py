@@ -199,22 +199,31 @@ st.markdown("""
 # [PART_3_START] - Automated Anti-Crash Backup Engine & Safe Cloud Vault Integration
 # ==========================================
 def push_db_to_cloud_vault():
-    """Yeh function SQLite DB file ko bytes me convert karke internet par aapki personal secret cloud tijori me fire-proof secure karta hai."""
-    import sqlite3
+    """Yeh function SQLite DB file ko bytes me convert karke jsonbin ke high-speed multi-device secure network block par lock karta hai."""
     import base64
     import requests
     import json
     
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    vault_url = "https://kvdb.io"
+    
+    # 🔒 SECURE HIGH-SPEED DYNAMIC CLOUD REPLICATION PIPELINE ENDPOINTS
+    bin_id = "66a60bebe41b4d34e4184ec9"
+    vault_url = f"https://jsonbin.io{bin_id}"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Master-Key": "$2a$10$w8.3fV8M7YnCqf33XfB2aeyu1x6uO/3eWshm.Fw6I6.Ww2T0eRjSe"
+    }
     
     if os.path.exists(primary_db_name):
         try:
             with open(primary_db_name, "rb") as db_file:
                 encoded_string = base64.b64encode(db_file.read()).decode('utf-8')
             
-            response = requests.post(vault_url, data=encoded_string, timeout=10)
-            if response.status_code == 200 or response.status_code == 201:
+            payload_data = {"db_bytes_stream": encoded_string}
+            
+            # Fire data upload across the secure server infrastructure pipeline
+            response = requests.put(vault_url, json=payload_data, headers=headers, timeout=15)
+            if response.status_code == 200:
                 return True
         except Exception as e:
             print(f"Cloud vault push bypassed: {str(e)}")
@@ -225,16 +234,26 @@ def pull_db_from_cloud_vault():
     import base64
     import requests
     
+    bin_id = "66a60bebe41b4d34e4184ec9"
+    vault_url = f"https://jsonbin.io{bin_id}/latest"
+    headers = {
+        "X-Master-Key": "$2a$10$w8.3fV8M7YnCqf33XfB2aeyu1x6uO/3eWshm.Fw6I6.Ww2T0eRjSe"
+    }
+    
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    vault_url = "https://kvdb.io"
     
     try:
-        response = requests.get(vault_url, timeout=12)
-        if response.status_code == 200 and response.text.strip():
-            raw_bytes = base64.b64decode(response.text.strip())
-            with open(primary_db_name, "wb") as db_file:
-                db_file.write(raw_bytes)
-            return True
+        response = requests.get(vault_url, headers=headers, timeout=15)
+        if response.status_code == 200:
+            json_response = response.json()
+            # Extract internal data schema layers cleanly
+            raw_payload_text = json_response.get("record", {}).get("db_bytes_stream", "")
+            
+            if raw_payload_text.strip():
+                raw_bytes = base64.b64decode(raw_payload_text.strip())
+                with open(primary_db_name, "wb") as db_file:
+                    db_file.write(raw_bytes)
+                return True
     except Exception as e:
         print(f"Cloud vault recovery skipped: {str(e)}")
     return False
@@ -327,8 +346,6 @@ def init_db():
     except: pass
     try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
     except: pass
-    
-    # 🔥 REMOVED THE PREMATURE COMMIT/CLOSE FROM HERE TO FIX THE PROMPTED RED ERROR BOX
     
 # ==========================================
 # [PART_3_END]
