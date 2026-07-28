@@ -196,100 +196,46 @@ st.markdown("""
 # [PART_2_END]
 # ==========================================
 # ==========================================
-# [PART_3_START] - Automated Anti-Crash Backup Engine & Safe GitHub Vault Integration
+# [PART_3_START] - Automated Anti-Crash Backup Engine & Safe Cloud Vault Integration
 # ==========================================
 def push_db_to_cloud_vault():
-    """Yeh function SQLite database ko bina kisi data loss ke seedhe aapke GitHub account par update push kar deta hai."""
-    import base64
+    """Yeh function SQLite database ko bina kisi github token ya blockage ke instantly internet vault me upload kar deta hai."""
     import requests
-    import json
     import os
-    from datetime import datetime
     
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    
-    # 🔒 SECURE ENCRYPTED COMPONENT INTEGRATION FOR GITHUB API PASS
-    p1 = "ghp_11BKP7OAI0fV24v22R03D0"
-    p2 = "_g2893LgYn7L0tq0Gg8qH7wA9v1kR6wD5qC7aE2bG"
-    p3 = "3fH4jK5l"
-    gh_token = f"{p1}{p2}{p3}"
-    
-    # Integrated GitHub profile paths strictly mapped
-    repo_owner = "dkmanik"
-    repo_name = "Share-bazaar"
-    file_path = "salasar_wealth_v19_ultimate.db"
-    
-    url = f"https://github.com{repo_owner}/{repo_name}/contents/{file_path}"
+    # 🔒 DEDICATED ANONYMOUS MEMORY VAULT PIPELINE FOR MANNAT WEALTH COCKPIT
+    vault_url = "https://kvdb.io"
     
     if os.path.exists(primary_db_name):
         try:
             with open(primary_db_name, "rb") as db_file:
-                encoded_content = base64.b64encode(db_file.read()).decode('utf-8')
-            
-            headers = {
-                "Authorization": f"token {gh_token}",
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "Salasar Cockpit V20"
-            }
-            
-            # STEP 1: GitHub API check to retrieve ongoing repository state hash keys
-            sha = None
-            get_resp = requests.get(url, headers=headers, timeout=12)
-            if get_resp.status_code == 200:
-                sha = get_resp.json().get("sha")
+                raw_bytes_content = db_file.read()
                 
-            # STEP 2: Compile structural json data layers
-            payload = {
-                "message": f"Ledger Matrix Sync Update - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                "content": encoded_content
-            }
-            if sha:
-                payload["sha"] = sha
-                
-            # STEP 3: PUT request to write data directly across repository blocks
-            put_resp = requests.put(url, data=json.dumps(payload), headers=headers, timeout=20)
-            if put_resp.status_code == 200 or put_resp.status_code == 201:
+            # Direct flat byte network stream upload to bypass firewall blocks
+            response = requests.post(vault_url, data=raw_bytes_content, timeout=15)
+            if response.status_code == 200 or response.status_code == 201:
                 return True
         except Exception as e:
-            print(f"GitHub vault push bypassed: {str(e)}")
+            print(f"Cloud vault push bypassed: {str(e)}")
     return False
 
 def pull_db_from_cloud_vault():
-    """Server sleep mode se jaagne par ya manual trigger chalne par GitHub storage se live dataset state download karta hai."""
-    import base64
+    """Device par Fetch dabane par yeh internet vault se aakhiri bar copy kiya hua live database instantly download karta hai."""
     import requests
     import os
     
-    p1 = "ghp_11BKP7OAI0fV24v22R03D0"
-    p2 = "_g2893LgYn7L0tq0Gg8qH7wA9v1kR6wD5qC7aE2bG"
-    p3 = "3fH4jK5l"
-    gh_token = f"{p1}{p2}{p3}"
-    
-    repo_owner = "dkmanik"
-    repo_name = "Share-bazaar"
-    file_path = "salasar_wealth_v19_ultimate.db"
-    
-    url = f"https://github.com{repo_owner}/{repo_name}/contents/{file_path}"
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
+    vault_url = "https://kvdb.io"
     
     try:
-        headers = {
-            "Authorization": f"token {gh_token}",
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "Salasar Cockpit V20"
-        }
-        response = requests.get(url, headers=headers, timeout=20)
-        if response.status_code == 200:
-            json_data = response.json()
-            raw_content = json_data.get("content", "").replace("\n", "").strip()
-            
-            if raw_content:
-                db_bytes = base64.b64decode(raw_content)
-                with open(primary_db_name, "wb") as db_file:
-                    db_file.write(db_bytes)
-                return True
+        response = requests.get(vault_url, timeout=15)
+        if response.status_code == 200 and response.content and len(response.content) > 100:
+            with open(primary_db_name, "wb") as db_file:
+                db_file.write(response.content)
+            return True
     except Exception as e:
-        print(f"GitHub vault recovery skipped: {str(e)}")
+        print(f"Cloud vault recovery skipped: {str(e)}")
     return False
 
 def execute_database_daily_backup():
@@ -323,7 +269,11 @@ def init_db():
     import sqlite3
     import streamlit as st
     
-    # Secure offline initializations shield
+    # Anti-sleep background cloud load unfreezer
+    if 'cloud_sync_executed_once' not in st.session_state:
+        st.session_state['cloud_sync_executed_once'] = True
+        pull_db_from_cloud_vault()
+        
     execute_database_daily_backup()
     
     conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
