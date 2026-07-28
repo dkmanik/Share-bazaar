@@ -2836,58 +2836,65 @@ with tab4:
     st.subheader("🌐 Universal Rates Sync & Multi-Device Control Center")
     st.info("Yahan se aap universal rates aur dynamic multi-device manual synchronization matrix status track kar sakte hain.")
     
-    # 📱 🔥 STEP 1: REAL-TIME DEVICE MULTI-SYNC INTERFACE (LOHE KI TIJORI MANUAL VAULT)
-    st.markdown("### 🔒 Lohe Ki Tijori: Multi-Device Manual Sync Vault")
+    # 📱 🔥 STEP 1: REAL-TIME DEVICE MULTI-SYNC INTERFACE (TEXT CLIPBOARD TIJORI)
+    st.markdown("### 🔒 Lohe Ki Tijori: Multi-Device Text Token Sync Vault")
     with st.container(border=True):
         sc_v1, sc_v2 = st.columns([0.5, 0.5])
+        
+        primary_db_name = "salasar_wealth_v19_ultimate.db"
+        import base64
+        
         with sc_v1:
-            st.markdown("#### 📤 Laptop Se Data Nikalein (Export)")
-            st.write("Apne laptop ya main system ka saara data ek safe file me download karke backup banayein.")
+            st.markdown("#### 📤 Laptop Se Sync Token Nikalein (Export)")
+            st.write("Apne laptop ka data ek chote text token me convert karke bhejney ke liye tayyar karein.")
             
-            primary_db_name = "salasar_wealth_v19_ultimate.db"
             try:
                 if os.path.exists(primary_db_name):
                     with open(primary_db_name, "rb") as file_db_stream:
-                        st.download_button(
-                            label="💾 Download Live DB File to Save / Sync",
-                            data=file_db_stream,
-                            file_name=primary_db_name,
-                            mime="application/octet-stream",
-                            use_container_width=True,
-                            key="manual_vault_download_btn_v20"
-                        )
-                    st.success("✨ Safe Checkpoint: Is button par click karke file ko apne paas save kar lein!")
+                        raw_encoded_text = base64.b64encode(file_db_stream.read()).decode('utf-8')
+                    
+                    # Renders a secure readable text box that never triggers an Android file upload crash
+                    st.text_area(
+                        "👇 Laptop Sync Token Code (Isé poora copy karke WhatsApp par bhejein):", 
+                        value=raw_encoded_text, 
+                        height=110,
+                        key="laptop_text_token_area_v20"
+                    )
+                    st.info("💡 Tip: Is box par click karke Select All karke WhatsApp par bhej dein.")
                 else:
                     st.error("❌ Production database file disk par nahi mili.")
             except Exception as e:
-                st.error(f"Error reading file stream: {str(e)}")
+                st.error(f"Error packing string payload: {str(e)}")
                         
         with sc_v2:
-            st.markdown("#### 📥 Mobile / Dusre Device Me Load Karein (Import)")
-            st.write("Laptop se nikali hui aakhiri saved file ko yahan upload karke instantly data sync karein.")
+            st.markdown("#### 📥 Mobile Me Token Paste Karein (Import)")
+            st.write("WhatsApp se copy kiya hua laptop ka sync token code yahan paste karke instantly data sync karein.")
             
-            uploaded_sync_file = st.file_uploader(
-                "Upload Live DB File to Sync", 
-                key="manual_vault_uploader_v20",
+            input_sync_token_string = st.text_area(
+                "Paste Laptop Sync Token Code Here", 
+                value="", 
+                placeholder="Yahan text token code paste karein...",
+                height=110,
+                key="manual_vault_text_input_v20",
                 label_visibility="collapsed"
             )
             
-            # 🔥 BYPASS ENGINE: Yeh check-condition ab hamesha live rahegi bina kisi error block ke
-            if uploaded_sync_file is not None:
+            if input_sync_token_string.strip():
                 if st.button("🔄 Force Overwrite & Restore Uploaded Data", use_container_width=True, type="primary", key="execute_manual_vault_restore_btn"):
-                    with st.spinner("Restoring dataset stream onto local database engine..."):
+                    with st.spinner("Restoring dataset stream from token matrix..."):
                         try:
-                            raw_uploaded_bytes = uploaded_sync_file.read()
+                            # Direct parsing structure with zero dependency on android file uploader selectors
+                            clean_text_payload = input_sync_token_string.strip().replace('"', '').replace("'", "")
+                            raw_decoded_bytes = base64.b64decode(clean_text_payload)
                             
-                            # 🔥 100% UNLOCKED LAYER: Extracted raw sizes to bypass Android native MIME conversion blocks
-                            if len(raw_uploaded_bytes) > 2000:
+                            if len(raw_decoded_bytes) > 4000:
                                 with open(primary_db_name, "wb") as target_file:
-                                    target_file.write(raw_uploaded_bytes)
+                                    target_file.write(raw_decoded_bytes)
                                 st.balloons()
-                                st.success("✨ Perfect bhai! Aapka saara data naye file snapshot se automatically re-aligned ho gaya hai!")
+                                st.success("✨ Perfect bhai! Aapka saara data naye text token se automatically re-aligned ho gaya hai!")
                                 st.rerun()
                             else:
-                                st.error("❌ Selected file is empty or too small.")
+                                st.error("❌ Invalid token code structure data layers. Integrity check failed.")
                         except Exception as err:
                             st.error(f"Sync failed: {str(err)}")
 
