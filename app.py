@@ -2830,39 +2830,65 @@ with tab3:
 # [PART_32_END]
 # ==========================================
 # ==========================================
-# [PART_33] - Global Price Controller & Cloud Sync Synchronization Engine
+# [PART_33] - Global Price Controller & Cloud Sync Synchronization Engine (PART A)
 # ==========================================
 with tab4:
     st.subheader("🌐 Universal Rates Sync & Multi-Device Control Center")
-    st.info("Yahan se aap unique scrip + expiry ke universal rates set karke automatic bulk settlement run kar sakte hain.")
+    st.info("Yahan se aap universal rates aur dynamic multi-device manual synchronization matrix status track kar sakte hain.")
     
-    # 📱 🔥 STEP 1: REAL-TIME DEVICE MULTI-SYNC INTERFACE (LOHE KI TIJORI)
-    st.markdown("### 🔒 Lohe Ki Tijori: Multi-Device Real-Time Sync Vault")
+    # 📱 🔥 STEP 1: REAL-TIME DEVICE MULTI-SYNC INTERFACE (LOHE KI TIJORI MANUAL VAULT)
+    st.markdown("### 🔒 Lohe Ki Tijori: Multi-Device Manual Sync Vault")
     with st.container(border=True):
         sc_v1, sc_v2 = st.columns([0.5, 0.5])
         with sc_v1:
-            st.markdown("#### 📤 Laptop Se Data Bhejein (Upload)")
-            st.write("Apne laptop ya main system par kiye huyen saare badlavo ko online safe backup lock lagayein.")
-            if st.button("💾 Force Push Current DB to Vault", use_container_width=True, type="secondary", key="force_cloud_push_btn_matrix_final_v20"):
-                with st.spinner("Encrypting and copying dataset payload to safe vault..."):
-                    success_flag = push_db_to_cloud_vault()
-                    if success_flag:
-                        st.success("✨ Swaahaa! Aapka saara data safe online tijori me locked ho gaya h. Mobile/Laptop par sync karne ke liye ready h!")
-                    else:
-                        st.error("❌ Storage mirror error. Kripya check karne folder file access permission rules.")
+            st.markdown("#### 📤 Laptop Se Data Nikalein (Export)")
+            st.write("Apne laptop ya main system ka saara data ek safe file me download karke backup banayein.")
+            
+            primary_db_name = "salasar_wealth_v19_ultimate.db"
+            try:
+                if os.path.exists(primary_db_name):
+                    with open(primary_db_name, "rb") as file_db_stream:
+                        st.download_button(
+                            label="💾 Download Live DB File to Save / Sync",
+                            data=file_db_stream,
+                            file_name=primary_db_name,
+                            mime="application/octet-stream",
+                            use_container_width=True,
+                            key="manual_vault_download_btn_v20"
+                        )
+                    st.success("✨ Safe Checkpoint: Is button par click karke file ko apne paas save kar lein!")
+                else:
+                    st.error("❌ Production database file disk par nahi mili.")
+            except Exception as e:
+                st.error(f"Error reading file stream: {str(e)}")
                         
         with sc_v2:
-            st.markdown("#### 📥 Mobile Me Data Utaran / Fetch (Download)")
-            st.write("Dusre device (mobile/laptop) par kiya hua aakhiri saved data is device par instantly live karein.")
-            if st.button("🔄 Force Fetch Live DB from Vault", use_container_width=True, type="primary", key="force_cloud_pull_btn_matrix_final_v20"):
-                with st.spinner("Downloading and restoring aakhiri saved dataset stream..."):
-                    success_flag = pull_db_from_cloud_vault()
-                    if success_flag:
-                        st.balloons()
-                        st.success("✨ Perfect bhai! Safe tijori se aakhiri live database snapshot download ho gaya h. Saara data automatically re-aligned!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Snapshot fetch failed. Vault storage register me koi valid file backup nahi mila.")
+            st.markdown("#### 📥 Mobile / Dusre Device Me Load Karein (Import)")
+            st.write("Laptop se nikali hui aakhiri saved file ko yahan upload karke instantly data sync karein.")
+            
+            uploaded_sync_file = st.file_uploader(
+                "Upload Live DB File to Sync", 
+                type=["db"], 
+                key="manual_vault_uploader_v20",
+                label_visibility="collapsed"
+            )
+            
+            if uploaded_sync_file is not None:
+                if st.button("🔄 Force Overwrite & Restore Uploaded Data", use_container_width=True, type="primary", key="execute_manual_vault_restore_btn"):
+                    with st.spinner("Restoring dataset stream onto local database engine..."):
+                        try:
+                            raw_uploaded_bytes = uploaded_sync_file.read()
+                            # Integrity verification signature check loop to prevent file corruption blocks
+                            if len(raw_uploaded_bytes) > 4000 and raw_uploaded_bytes[:15] == b'SQLite format 3':
+                                with open(primary_db_name, "wb") as target_file:
+                                    target_file.write(raw_uploaded_bytes)
+                                st.balloons()
+                                st.success("✨ Perfect bhai! Aapka saara data naye file snapshot se automatically re-aligned ho gaya hai!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Uploaded file valid SQLite format database nahi hai. Corruption blocked.")
+                        except Exception as err:
+                            st.error(f"Sync failed: {str(err)}")
 
     st.write("---")
     
@@ -2895,12 +2921,10 @@ with tab4:
         if submit_prices:
             for sym, prc in updated_prices.items():
                 update_global_price(sym, prc)
-            push_db_to_cloud_vault()
-            st.success("Universal rates locked and automatically backed up to Cloud Vault!")
+            st.success("Universal rates locked successfully!")
             st.rerun()
             
     st.write("---")
-    
     # --- STEP 3: SYSTEM-WIDE BULK WEEKLY SETTLEMENT ENGINE ---
     st.markdown("#### ⚡ Step 3: System-Wide Bulk Weekly Settlement Engine")
     next_weeks_avail_bulk = [w for w in week_options if week_options.index(w) > week_options.index(st.session_state['active_block'])]
@@ -2916,8 +2940,7 @@ with tab4:
             with st.spinner("Processing system-wide transactions..."):
                 for client_profile_name in CLIENTS:
                     execute_advanced_weekly_settlement(client_profile_name, st.session_state['active_block'], target_bulk_week)
-            push_db_to_cloud_vault()
-            st.balloons(); st.success(f"🎯 Master Bulk Settlement Executed and Cloud Synced perfectly inside '{target_bulk_week}'!"); st.rerun()
+            st.balloons(); st.success(f"🎯 Master Bulk Settlement Executed perfectly inside '{target_bulk_week}'!"); st.rerun()
             
     st.write("---")
     
@@ -2936,8 +2959,7 @@ with tab4:
                 cursor.execute("DELETE FROM trades WHERE week_block = ?", (rollback_target_week,))
                 cursor.execute("DELETE FROM cash_transactions WHERE remarks LIKE '%Weekly Settlement%'")
                 conn.commit(); conn.close()
-                push_db_to_cloud_vault()
-                st.success("🔄 Master Settlement Rollback Executed & Cloud Synchronized!"); st.rerun()
+                st.success("🔄 Master Settlement Rollback Executed Flawlessly!"); st.rerun()
 
     st.write("---")
     
@@ -2947,8 +2969,7 @@ with tab4:
     with mc_b1:
         if st.button("💾 Create Instant Force Backup Now", use_container_width=True, type="secondary", key="force_instant_backup_btn_test"):
             execute_database_daily_backup()
-            push_db_to_cloud_vault()
-            st.success("✨ Today's database copy saved into vault and mirrored to Cloud!"); st.rerun()
+            st.success("✨ Today's database copy saved into vault!"); st.rerun()
             
     backup_vault_dir = "salasar_db_vault"
     available_restore_files = sorted([f for f in os.listdir(backup_vault_dir) if f.endswith('.db')], reverse=True) if os.path.exists(backup_vault_dir) else []
@@ -2967,8 +2988,7 @@ with tab4:
                     try:
                         import shutil
                         shutil.copy2(os.path.join(backup_vault_dir, selected_snapshot_to_restore), 'salasar_wealth_v19_ultimate.db')
-                        push_db_to_cloud_vault()
-                        st.balloons(); st.success("✨ Database Snapshot Restored and Cloud Overridden perfectly!"); st.rerun()
+                        st.balloons(); st.success("✨ Database Snapshot Restored perfectly!"); st.rerun()
                     except Exception as e: st.error(f"Error: {str(e)}")
 # ==========================================
 # [PART_33_END]
