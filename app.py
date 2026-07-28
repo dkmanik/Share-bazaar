@@ -206,7 +206,6 @@ def push_db_to_cloud_vault():
     import json
     
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    # Unique anonymized endpoint key specifically dedicated for Mannat Wealth Master System V20
     vault_url = "https://kvdb.io"
     
     if os.path.exists(primary_db_name):
@@ -214,7 +213,6 @@ def push_db_to_cloud_vault():
             with open(primary_db_name, "rb") as db_file:
                 encoded_string = base64.b64encode(db_file.read()).decode('utf-8')
             
-            # Non-blocking connection timeout to prevent UI lag parameters
             response = requests.post(vault_url, data=encoded_string, timeout=10)
             if response.status_code == 200 or response.status_code == 201:
                 return True
@@ -276,6 +274,7 @@ def init_db():
     execute_database_daily_backup() # 🔥 First execution checkpoint triggers backup save
     conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
@@ -301,7 +300,7 @@ def init_db():
         
     try:
         cursor.execute("PRAGMA table_info(master_clients)")
-        columns_mc = [c[1] for c in cursor.fetchall()]
+        columns_mc = [c for c in cursor.fetchall()]
         if "sub_broker_tag" in columns_mc:
             cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
             old_rows = cursor.fetchall()
@@ -328,8 +327,9 @@ def init_db():
     except: pass
     try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
     except: pass
-    conn.commit()
-    conn.close()
+    
+    # 🔥 REMOVED THE PREMATURE COMMIT/CLOSE FROM HERE TO FIX THE PROMPTED RED ERROR BOX
+    
 # ==========================================
 # [PART_3_END]
 # ==========================================
@@ -2784,14 +2784,14 @@ with tab4:
     st.subheader("🌐 Global Price Sync & System-Wide Bulk Settlement Center")
     st.info("Yahan se aap universal rates aur dynamic multi-device synchronization matrix status track kar sakte hain.")
     
-    # 📱 🔥 NEW UPGRADE LAYER: REAL-TIME DEVICE MULTI-SYNC INTERFACE
+    # 📱 🔥 STEP 1: REAL-TIME DEVICE MULTI-SYNC VAULT INTERFACE (STREAMLIT TIJORI)
     st.markdown("### 🔒 Streamlit Tijori: Multi-Device Real-Time Sync Vault")
     with st.container(border=True):
         sc_v1, sc_v2 = st.columns([0.5, 0.5])
         with sc_v1:
             st.markdown("#### 📤 Upload / Save Data to Cloud")
             st.write("Apne laptop ya mobile se kiye huyen saare badlavo ko online safe backup lock lagayein.")
-            if st.button("💾 Force Push Current DB to Cloud Vault", use_container_width=True, type="secondary", key="force_cloud_push_btn_matrix"):
+            if st.button("💾 Force Push Current DB to Cloud Vault", use_container_width=True, type="secondary", key="force_cloud_push_btn_matrix_v20"):
                 with st.spinner("Encrypting and uploading payload to vault..."):
                     success_flag = push_db_to_cloud_vault()
                     if success_flag:
@@ -2802,7 +2802,7 @@ with tab4:
         with sc_v2:
             st.markdown("#### 📥 Download / Fetch Data to Device")
             st.write("Dusre device (mobile/laptop) par kiya hua aakhiri saved data is device par instantly live karein.")
-            if st.button("🔄 Force Fetch Live DB from Cloud Vault", use_container_width=True, type="primary", key="force_cloud_pull_btn_matrix"):
+            if st.button("🔄 Force Fetch Live DB from Cloud Vault", use_container_width=True, type="primary", key="force_cloud_pull_btn_matrix_v20"):
                 with st.spinner("Downloading payload string matrix from cloud..."):
                     success_flag = pull_db_from_cloud_vault()
                     if success_flag:
@@ -2813,6 +2813,8 @@ with tab4:
                         st.error("❌ Cloud snapshot fetch failed. Kripya check karein ki cloud par backup available hai ya nahi.")
 
     st.write("---")
+    
+    # --- STEP 2: UNIVERSAL RATES SYNC PANEL ---
     conn_global = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     df_all_trades_raw = pd.read_sql_query("SELECT script_name, selected_expiry, buy_qty, sell_qty FROM trades WHERE week_block = ?", conn_global, params=(st.session_state['active_block'],))
     conn_global.close()
@@ -2830,7 +2832,7 @@ with tab4:
         active_global_symbols = ["nifty_30-jun-2026", "delhivery_30-jun-2026", "goldm", "sm_30-jun-2026", "sm_30-jul-2026"]
         
     with st.form("global_system_price_form"):
-        st.markdown("#### 📝 Step 1: Set Universal Expiry-Wise Closing Rates")
+        st.markdown("#### 📝 Step 2: Set Universal Expiry-Wise Closing Rates")
         updated_prices = {}
         for symbol_key in sorted(active_global_symbols):
             current_rate = get_global_price(symbol_key)
@@ -2841,13 +2843,14 @@ with tab4:
         if submit_prices:
             for sym, prc in updated_prices.items():
                 update_global_price(sym, prc)
-            # 🔥 AUTOMATED TRIGGER CHAIN: Rate save hote hi database automatic background me cloud par lock ho jayega
             push_db_to_cloud_vault()
             st.success("Universal rates locked and automatically backed up to Cloud Vault!")
             st.rerun()
             
     st.write("---")
-    st.markdown("#### ⚡ Step 2: System-Wide Bulk Weekly Settlement Engine")
+    
+    # --- STEP 3: SYSTEM-WIDE BULK WEEKLY SETTLEMENT ENGINE ---
+    st.markdown("#### ⚡ Step 3: System-Wide Bulk Weekly Settlement Engine")
     next_weeks_avail_bulk = [w for w in week_options if week_options.index(w) > week_options.index(st.session_state['active_block'])]
     target_bulk_week = st.selectbox("🎯 Select Next Target Week For BULK Carry Forward", next_weeks_avail_bulk if next_weeks_avail_bulk else ["No Future Weeks Created"], key="bulk_settle_wk_drop")
     confirm_bulk_checkbox = st.checkbox("Confirm Executing Bulk Settlement for ALL Clients simultaneously", key="cbc_lock_final")
@@ -2865,7 +2868,9 @@ with tab4:
             st.balloons(); st.success(f"🎯 Master Bulk Settlement Executed and Cloud Synced perfectly inside '{target_bulk_week}'!"); st.rerun()
             
     st.write("---")
-    st.markdown("#### ⚡ Step 3: Undo / Rollback Last Wrong Weekly Settlement")
+    
+    # --- STEP 4: UNDO / ROLLBACK LAST WRONG SETTLEMENT ---
+    st.markdown("#### ⚡ Step 4: Undo / Rollback Last Wrong Weekly Settlement")
     rollback_target_week = st.selectbox("Select the Wrong Target Week to Rollback", week_options, key="rb_wk_drop_v20")
     confirm_rollback_check = st.checkbox("Confirm Permanent Settlement Rollback & Balance Reversal Lock", key="c_rb_chk_v20")
     
@@ -2883,7 +2888,9 @@ with tab4:
                 st.success("🔄 Master Settlement Rollback Executed & Cloud Synchronized!"); st.rerun()
 
     st.write("---")
-    st.markdown("#### 📂 Step 4: Secure Database Snapshot One-Click Restore Vault")
+    
+    # --- STEP 5: SECURE DATABASE SNAPSHOT RESTORE VAULT ---
+    st.markdown("#### 📂 Step 5: Secure Database Snapshot One-Click Restore Vault")
     mc_b1, mc_b2 = st.columns([0.4, 0.6])
     with mc_b1:
         if st.button("💾 Create Instant Force Backup Now", use_container_width=True, type="secondary", key="force_instant_backup_btn_test"):
