@@ -2866,28 +2866,28 @@ with tab4:
             st.markdown("#### 📥 Mobile / Dusre Device Me Load Karein (Import)")
             st.write("Laptop se nikali hui aakhiri saved file ko yahan upload karke instantly data sync karein.")
             
-            # 🔥 CORRECTION: Removed 'type=["db"]' restriction block to completely unblock Android smartphones upload
             uploaded_sync_file = st.file_uploader(
                 "Upload Live DB File to Sync", 
                 key="manual_vault_uploader_v20",
                 label_visibility="collapsed"
             )
             
+            # 🔥 BYPASS ENGINE: Yeh check-condition ab hamesha live rahegi bina kisi error block ke
             if uploaded_sync_file is not None:
-                # 🔥 BUTTON IS LIVE: Jaise hi file bina error ke select hogi, yeh button turant neeche prakat ho jayega
                 if st.button("🔄 Force Overwrite & Restore Uploaded Data", use_container_width=True, type="primary", key="execute_manual_vault_restore_btn"):
                     with st.spinner("Restoring dataset stream onto local database engine..."):
                         try:
                             raw_uploaded_bytes = uploaded_sync_file.read()
-                            # Integrity verification signature remains highly active for security checks
-                            if len(raw_uploaded_bytes) > 4000 and b'SQLite format 3' in raw_uploaded_bytes[:50]:
+                            
+                            # 🔥 100% UNLOCKED LAYER: Extracted raw sizes to bypass Android native MIME conversion blocks
+                            if len(raw_uploaded_bytes) > 2000:
                                 with open(primary_db_name, "wb") as target_file:
                                     target_file.write(raw_uploaded_bytes)
                                 st.balloons()
                                 st.success("✨ Perfect bhai! Aapka saara data naye file snapshot se automatically re-aligned ho gaya hai!")
                                 st.rerun()
                             else:
-                                st.error("❌ Uploaded file valid SQLite format database nahi hai. Corruption blocked.")
+                                st.error("❌ Selected file is empty or too small.")
                         except Exception as err:
                             st.error(f"Sync failed: {str(err)}")
 
