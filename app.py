@@ -212,8 +212,6 @@ def push_db_to_cloud_vault():
     token_slice_1 = "11BKP7OAI0fV24v22R03D0"
     token_slice_2 = "_g2893LgYn7L0tq0Gg8qH7wA9v1kR6wD5qC7aE2bG"
     token_slice_3 = "3fH4jK5l"
-    
-    # Dynamic re-routing mechanism to generate the ghp key standard array
     constructed_key = f"ghp_{token_slice_1}{token_slice_2}{token_slice_3}"
     
     # Integrated GitHub profile paths strictly mapped
@@ -250,8 +248,6 @@ def push_db_to_cloud_vault():
                 
             # STEP 3: PUT request to write bytes directly into your github repository storage vault
             put_resp = requests.put(url, data=json.dumps(payload), headers=headers, timeout=20)
-            
-            # 🔥 100% PERFECT COCKPIT SYNTAX RESTORATION: Fixed with direct flat evaluation logic
             if put_resp.status_code == 200 or put_resp.status_code == 201:
                 return True
         except Exception as e:
