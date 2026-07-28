@@ -196,107 +196,12 @@ st.markdown("""
 # [PART_2_END]
 # ==========================================
 # ==========================================
-# [PART_3_START] - Automated Anti-Crash Backup Engine & Safe GitHub Vault Integration
+# [PART_3_START] - Automated Anti-Crash Backup Engine & Initialisation Layer
 # ==========================================
-def push_db_to_cloud_vault():
-    """Yeh function SQLite database ko bina kisi data loss ke seedhe aapke GitHub account par update push kar deta hai."""
-    import base64
-    import requests
-    import json
-    import os
-    from datetime import datetime
-    
-    primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    
-    # 🔒 SECURE ENCRYPTED COMPONENT INTEGRATION FOR GITHUB API PASS (ANTI-VIRUS BYPASS)
-    token_slice_1 = "11BKP7OAI0fV24v22R03D0"
-    token_slice_2 = "_g2893LgYn7L0tq0Gg8qH7wA9v1kR6wD5qC7aE2bG"
-    token_slice_3 = "3fH4jK5l"
-    constructed_key = f"ghp_{token_slice_1}{token_slice_2}{token_slice_3}"
-    
-    # Integrated GitHub profile paths strictly mapped
-    repo_owner = "dkmanik"
-    repo_name = "Share-bazaar"
-    file_path = "salasar_wealth_v19_ultimate.db"
-    
-    url = f"https://github.com{repo_owner}/{repo_name}/contents/{file_path}"
-    
-    if os.path.exists(primary_db_name):
-        try:
-            with open(primary_db_name, "rb") as db_file:
-                encoded_content = base64.b64encode(db_file.read()).decode('utf-8')
-            
-            headers = {
-                "Authorization": f"token {constructed_key}",
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "Salasar-Wealth-Master-Cockpit"
-            }
-            
-            # STEP 1: Pehle repositories ke hash database se ongoing SHA key check karenge
-            sha = None
-            get_resp = requests.get(url, headers=headers, timeout=12)
-            if get_resp.status_code == 200:
-                sha = get_resp.json().get("sha")
-                
-            # STEP 2: Content data body properties load block
-            payload = {
-                "message": f"Ledger Sync Matrix Save - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                "content": encoded_content
-            }
-            if sha:
-                payload["sha"] = sha
-                
-            # STEP 3: PUT request to write bytes directly into your github repository storage vault
-            put_resp = requests.put(url, data=json.dumps(payload), headers=headers, timeout=20)
-            if put_resp.status_code == 200 or put_resp.status_code == 201:
-                return True
-        except Exception as e:
-            print(f"GitHub vault push bypassed: {str(e)}")
-    return False
-
-def pull_db_from_cloud_vault():
-    """Server reset hone par ya mobile par Fetch dabane par yeh direct GitHub account se aakhiri live database snapshot restore karta hai."""
-    import base64
-    import requests
-    import os
-    
-    token_slice_1 = "11BKP7OAI0fV24v22R03D0"
-    token_slice_2 = "_g2893LgYn7L0tq0Gg8qH7wA9v1kR6wD5qC7aE2bG"
-    token_slice_3 = "3fH4jK5l"
-    constructed_key = f"ghp_{token_slice_1}{token_slice_2}{token_slice_3}"
-    
-    repo_owner = "dkmanik"
-    repo_name = "Share-bazaar"
-    file_path = "salasar_wealth_v19_ultimate.db"
-    
-    url = f"https://github.com{repo_owner}/{repo_name}/contents/{file_path}"
-    primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    
-    try:
-        headers = {
-            "Authorization": f"token {constructed_key}",
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "Salasar-Wealth-Master-Cockpit"
-        }
-        response = requests.get(url, headers=headers, timeout=20)
-        if response.status_code == 200:
-            json_data = response.json()
-            raw_content = json_data.get("content", "").replace("\n", "").strip()
-            
-            if raw_content:
-                db_bytes = base64.b64decode(raw_content)
-                with open(primary_db_name, "wb") as db_file:
-                    db_file.write(db_bytes)
-                return True
-    except Exception as e:
-        print(f"GitHub vault recovery skipped: {str(e)}")
-    return False
-
 def execute_database_daily_backup():
     """Yeh function application startup par pichli database file ka local automatic backup banata hai."""
     import shutil
     import os
-    from datetime import datetime
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
     
     if os.path.exists(primary_db_name):
@@ -320,15 +225,9 @@ def execute_database_daily_backup():
             print(f"Backup operation skipped/failed: {str(e)}")
 
 def init_db():
-    import sqlite3
-    import streamlit as st
-    
-    # Local anti-crash daily copy trigger tracking logic variables
-    execute_database_daily_backup()
-    
+    execute_database_daily_backup() # 🔥 First execution checkpoint triggers backup save
     conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
@@ -346,15 +245,19 @@ def init_db():
             symbol TEXT PRIMARY KEY, closing_price REAL, updated_at TEXT
         )''')
         
+    # 🔥 MULTI-MAPPING UPGRADE LAYER: Creating a separate mapping database table safely inside open connection
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sub_broker_mappings (
-            client_name TEXT, sub_broker_tag TEXT, timestamp TEXT,
+            client_name TEXT,
+            sub_broker_tag TEXT,
+            timestamp TEXT,
             PRIMARY KEY (client_name, sub_broker_tag)
         )''')
         
+    # Automatic historical data migration matrix rule
     try:
         cursor.execute("PRAGMA table_info(master_clients)")
-        columns_mc = [c for c in cursor.fetchall()]
+        columns_mc = [c[1] for c in cursor.fetchall()]
         if "sub_broker_tag" in columns_mc:
             cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
             old_rows = cursor.fetchall()
@@ -369,7 +272,8 @@ def init_db():
         for c_profile, def_exp in settings_rows:
             if def_exp and str(def_exp).strip():
                 cursor.execute("""
-                    UPDATE trades SET selected_expiry = ? 
+                    UPDATE trades 
+                    SET selected_expiry = ? 
                     WHERE client_name = ? 
                     AND (selected_expiry IS NULL OR selected_expiry = '' OR selected_expiry = 'None' OR selected_expiry = '()')
                 """, (str(def_exp).strip(), c_profile))
@@ -381,7 +285,6 @@ def init_db():
     except: pass
     try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
     except: pass
-    
 # ==========================================
 # [PART_3_END]
 # ==========================================
@@ -2830,85 +2733,28 @@ with tab3:
 # [PART_32_END]
 # ==========================================
 # ==========================================
-# [PART_33_START] - Global Price Controller & Cloud Sync Synchronization Engine
+# [PART_33] - Global Price Controller & Bulk System Engine (Complete)
 # ==========================================
 with tab4:
-    st.subheader("🌐 Universal Rates Sync & Multi-Device Control Center")
-    st.info("Yahan se aap universal rates aur dynamic multi-device manual synchronization matrix status track kar sakte hain.")
+    st.subheader("🌐 Global Price Sync & System-Wide Bulk Settlement Center")
+    st.info("Yahan se aap unique scrip + expiry ke universal rates set karke automatic bulk settlement run kar sakte hain.")
     
-    # 📱 🔥 STEP 1: REAL-TIME DEVICE MULTI-SYNC INTERFACE (TEXT CLIPBOARD TIJORI)
-    st.markdown("### 🔒 Lohe Ki Tijori: Multi-Device Text Token Sync Vault")
-    with st.container(border=True):
-        sc_v1, sc_v2 = st.columns([0.5, 0.5])
-        
-        primary_db_name = "salasar_wealth_v19_ultimate.db"
-        import base64
-        
-        with sc_v1:
-            st.markdown("#### 📤 Laptop Se Sync Token Nikalein (Export)")
-            st.write("Apne laptop ka data ek chote text token me convert karke bhejney ke liye tayyar karein.")
-            
-            try:
-                if os.path.exists(primary_db_name):
-                    with open(primary_db_name, "rb") as file_db_stream:
-                        raw_encoded_text = base64.b64encode(file_db_stream.read()).decode('utf-8')
-                    
-                    # Renders a secure readable text box that never triggers an Android file upload crash
-                    st.text_area(
-                        "👇 Laptop Sync Token Code (Isé poora copy karke WhatsApp par bhejein):", 
-                        value=raw_encoded_text, 
-                        height=110,
-                        key="laptop_text_token_area_v20"
-                    )
-                    st.info("💡 Tip: Is box par click karke Select All karke WhatsApp par bhej dein.")
-                else:
-                    st.error("❌ Production database file disk par nahi mili.")
-            except Exception as e:
-                st.error(f"Error packing string payload: {str(e)}")
-                        
-        with sc_v2:
-            st.markdown("#### 📥 Mobile Me Token Paste Karein (Import)")
-            st.write("WhatsApp se copy kiya hua laptop ka sync token code yahan paste karke instantly data sync karein.")
-            
-            input_sync_token_string = st.text_area(
-                "Paste Laptop Sync Token Code Here", 
-                value="", 
-                placeholder="Yahan text token code paste karein...",
-                height=110,
-                key="manual_vault_text_input_v20",
-                label_visibility="collapsed"
-            )
-            
-            if input_sync_token_string.strip():
-                if st.button("🔄 Force Overwrite & Restore Uploaded Data", use_container_width=True, type="primary", key="execute_manual_vault_restore_btn"):
-                    with st.spinner("Restoring dataset stream from token matrix..."):
-                        try:
-                            # Direct parsing structure with zero dependency on android file uploader selectors
-                            clean_text_payload = input_sync_token_string.strip().replace('"', '').replace("'", "")
-                            raw_decoded_bytes = base64.b64decode(clean_text_payload)
-                            
-                            if len(raw_decoded_bytes) > 4000:
-                                with open(primary_db_name, "wb") as target_file:
-                                    target_file.write(raw_decoded_bytes)
-                                st.balloons()
-                                st.success("✨ Perfect bhai! Aapka saara data naye text token se automatically re-aligned ho gaya hai!")
-                                st.rerun()
-                            else:
-                                st.error("❌ Invalid token code structure data layers. Integrity check failed.")
-                        except Exception as err:
-                            st.error(f"Sync failed: {str(err)}")
-
-    st.write("---")
-    
-    # --- STEP 2: UNIVERSAL RATES SYNC PANEL ---
     conn_global = sqlite3.connect('salasar_wealth_v19_ultimate.db')
-    df_all_trades_raw = pd.read_sql_query("SELECT script_name, selected_expiry, buy_qty, sell_qty FROM trades WHERE week_block = ?", conn_global, params=(st.session_state['active_block'],))
+    # 🔥 CRITICAL FIX: Filtering records STRICTLY by active week block instead of scanning all-time history tables
+    df_all_trades_raw = pd.read_sql_query(
+        "SELECT script_name, selected_expiry, buy_qty, sell_qty "
+        "FROM trades WHERE week_block = ?", 
+        conn_global, 
+        params=(st.session_state['active_block'],)
+    )
     conn_global.close()
     
     active_global_symbols = set()
     if not df_all_trades_raw.empty:
         df_all_trades_raw['script_name'] = df_all_trades_raw['script_name'].astype(str).str.lower().str.strip()
+        # 🔥 FORCE EXPIRY UNIQUE KEY PARSING TO PREVENT DUPLICATE GENERATION COLOUMNS
         df_all_trades_raw['selected_expiry'] = df_all_trades_raw['selected_expiry'].astype(str).str.lower().str.strip()
+        
         for (name, expiry), group in df_all_trades_raw.groupby(['script_name', 'selected_expiry']):
             if (int(group['buy_qty'].sum()) - int(group['sell_qty'].sum())) != 0:
                 exp_suffix = f"_{expiry}" if expiry else ""
@@ -2917,24 +2763,29 @@ with tab4:
     if not active_global_symbols:
         active_global_symbols = ["nifty_30-jun-2026", "delhivery_30-jun-2026", "goldm", "sm_30-jun-2026", "sm_30-jul-2026"]
         
+    # --- STEP 1: UNIVERSAL RATES SYNC PANEL ---
     with st.form("global_system_price_form"):
-        st.markdown("#### 📝 Step 2: Set Universal Expiry-Wise Closing Rates")
+        st.markdown("#### 📝 Step 1: Set Universal Expiry-Wise Closing Rates")
         updated_prices = {}
         for symbol_key in sorted(active_global_symbols):
             current_rate = get_global_price(symbol_key)
             display_label = symbol_key.upper().replace("_", " (") + (")" if "_" in symbol_key else "")
-            updated_prices[symbol_key] = st.number_input(f"Closing Price for [{display_label}] (₹)", value=float(current_rate if current_rate > 0 else 100.0), step=0.05, key=f"settle_rate_{symbol_key}")
+            
+            updated_prices[symbol_key] = st.number_input(
+                f"Closing Price for [{display_label}] (₹)", 
+                value=float(current_rate if current_rate > 0 else 100.0),
+                step=0.05, key=f"settle_rate_{symbol_key}"
+            )
         
         submit_prices = st.form_submit_button("🔥 Save & Sync Rates Across All Portfolios", use_container_width=True)
         if submit_prices:
             for sym, prc in updated_prices.items():
                 update_global_price(sym, prc)
-            st.success("Universal rates locked successfully!")
+            st.success("Universal expiry-wise rates locked successfully!")
             st.rerun()
             
     st.write("---")
-    # --- STEP 3: SYSTEM-WIDE BULK WEEKLY SETTLEMENT ENGINE ---
-    st.markdown("#### ⚡ Step 3: System-Wide Bulk Weekly Settlement Engine")
+    st.markdown("#### ⚡ Step 2: System-Wide Bulk Weekly Settlement Engine")
     next_weeks_avail_bulk = [w for w in week_options if week_options.index(w) > week_options.index(st.session_state['active_block'])]
     target_bulk_week = st.selectbox("🎯 Select Next Target Week For BULK Carry Forward", next_weeks_avail_bulk if next_weeks_avail_bulk else ["No Future Weeks Created"], key="bulk_settle_wk_drop")
     confirm_bulk_checkbox = st.checkbox("Confirm Executing Bulk Settlement for ALL Clients simultaneously", key="cbc_lock_final")
@@ -2951,9 +2802,8 @@ with tab4:
             st.balloons(); st.success(f"🎯 Master Bulk Settlement Executed perfectly inside '{target_bulk_week}'!"); st.rerun()
             
     st.write("---")
-    
-    # --- STEP 4: UNDO / ROLLBACK LAST WRONG SETTLEMENT ---
-    st.markdown("#### ⚡ Step 4: Undo / Rollback Last Wrong Weekly Settlement")
+    st.markdown("#### ⚡ Step 3: Undo / Rollback Last Wrong Weekly Settlement")
+    st.warning("⚠️ Warning: Yeh action naye week block se automatic carry forward trades ko completely wipe out kar dega.")
     rollback_target_week = st.selectbox("Select the Wrong Target Week to Rollback", week_options, key="rb_wk_drop_v20")
     confirm_rollback_check = st.checkbox("Confirm Permanent Settlement Rollback & Balance Reversal Lock", key="c_rb_chk_v20")
     
@@ -2970,14 +2820,11 @@ with tab4:
                 st.success("🔄 Master Settlement Rollback Executed Flawlessly!"); st.rerun()
 
     st.write("---")
-    
-    # --- STEP 5: SECURE DATABASE SNAPSHOT RESTORE VAULT ---
-    st.markdown("#### 📂 Step 5: Secure Database Snapshot One-Click Restore Vault")
+    st.markdown("#### 📂 Step 4: Secure Database Snapshot One-Click Restore Vault")
     mc_b1, mc_b2 = st.columns([0.4, 0.6])
     with mc_b1:
         if st.button("💾 Create Instant Force Backup Now", use_container_width=True, type="secondary", key="force_instant_backup_btn_test"):
-            execute_database_daily_backup()
-            st.success("✨ Today's database copy saved into vault!"); st.rerun()
+            execute_database_daily_backup(); st.success("✨ Today's database copy saved into vault!"); st.rerun()
             
     backup_vault_dir = "salasar_db_vault"
     available_restore_files = sorted([f for f in os.listdir(backup_vault_dir) if f.endswith('.db')], reverse=True) if os.path.exists(backup_vault_dir) else []
@@ -2987,6 +2834,7 @@ with tab4:
     else:
         st.write("")
         selected_snapshot_to_restore = st.selectbox("⏳ Select Historical Target Snapshot To Restore:", available_restore_files, key="db_restore_selector_dropdown")
+        st.warning(f"❗ Warning: Restore execute karte hi choice file '{selected_snapshot_to_restore}' live production par override ho jayegi.")
         confirm_dangerous_restore_chk = st.checkbox("Confirm Live Production Database Override Lock", key="chk_security_lock_restore_dangerous")
         
         if st.button("🔄 Execute One-Click Database Snapshot Restore", use_container_width=True, type="primary", key="force_restore_snapshot_btn"):
