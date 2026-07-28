@@ -208,7 +208,6 @@ def push_db_to_cloud_vault():
     
     if os.path.exists(primary_db_name):
         try:
-            # File agar bohot choti h to push bypass krein
             if os.path.getsize(primary_db_name) < 1000:
                 return False
                 
@@ -216,7 +215,8 @@ def push_db_to_cloud_vault():
                 raw_bytes_content = db_file.read()
                 
             response = requests.post(vault_url, data=raw_bytes_content, timeout=15)
-            if response.status_code in:
+            # 🔥 FIXED EXPLICIT SYNTAX LINE: Removed incomplete 'in' operator to avoid loop crash
+            if response.status_code == 200 or response.status_code == 201:
                 return True
         except Exception as e:
             print(f"Cloud vault push bypassed: {str(e)}")
@@ -233,7 +233,6 @@ def pull_db_from_cloud_vault():
     try:
         response = requests.get(vault_url, timeout=15)
         if response.status_code == 200 and response.content:
-            # 🔥 CRITICAL EXPLICIT INTEGRITY CHECK: Valid byte metadata pattern match check loops
             raw_data = response.content
             if len(raw_data) > 4000 and raw_data[:15] == b'SQLite format 3':
                 with open(primary_db_name, "wb") as db_file:
@@ -277,23 +276,20 @@ def init_db():
     
     primary_db_name = 'salasar_wealth_v19_ultimate.db'
     
-    # Cloud storage auto fetch engine layer
     if 'cloud_sync_executed_once' not in st.session_state:
         st.session_state['cloud_sync_executed_once'] = True
         pull_db_from_cloud_vault()
         
     execute_database_daily_backup()
     
-    # 🔥 ANTI-CRASH SHIELD: Local database structure automatic formatting loop recovery block
     try:
         conn = sqlite3.connect(primary_db_name)
         cursor = conn.cursor()
         cursor.execute("PRAGMA integrity_check")
         res = cursor.fetchone()
-        if res and res[0] != 'ok':
+        if res and res != 'ok':
             raise sqlite3.DatabaseError("Corrupted file structural mismatch.")
     except Exception:
-        # File corrupt hone ki condition me instant reset mechanism loop fire krein
         try: conn.close()
         except: pass
         if os.path.exists(primary_db_name):
