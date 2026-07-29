@@ -196,34 +196,38 @@ st.markdown("""
 # [PART_2_END]
 # ==========================================
 # ==========================================
-# [PART_3_START] - Supabase Cloud Vault Production Database Integration (ANTI-COMPRESSION SHIELD)
+# [PART_3_START] - Automated Anti-Crash Backup Engine & Initialisation Layer
 # ==========================================
-import requests
-import json
-import sqlite3
-import os
-from datetime import datetime
-
-# 🔒 SECURE LIVE CREDENTIALS FOR MANNAT WEALTH PRODUCTION STORAGE
-SUPABASE_URL = "https://supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInRefI6Ind6cmpxeHRiYnl2bXd6cXl2em8iLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc0MDU0MTIzNCwiZXhwIjoyMDU2MTE3MjM0fQ.v_2AeyX1x6uO_3eWshm_Fw6I6_Ww2T0eRjSe_MannatV20"
-
-headers = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=representation"
-}
+def execute_database_daily_backup():
+    """Yeh function application startup par pichli database file ka local automatic backup banata hai."""
+    import shutil
+    import os
+    primary_db_name = 'salasar_wealth_v19_ultimate.db'
+    
+    if os.path.exists(primary_db_name):
+        try:
+            current_date_str = datetime.now().strftime("%Y-%m-%d")
+            backup_folder = "salasar_db_vault"
+            
+            if not os.path.exists(backup_folder):
+                os.makedirs(backup_folder)
+                
+            backup_filename = os.path.join(backup_folder, f"salasar_backup_{current_date_str}.db")
+            
+            if not os.path.exists(backup_filename):
+                shutil.copy2(primary_db_name, backup_filename)
+                
+                all_backups = sorted([os.path.join(backup_folder, f) for f in os.listdir(backup_folder) if f.endswith('.db')])
+                if len(all_backups) > 14:
+                    for old_backup_file in all_backups[:-14]:
+                        os.remove(old_backup_file)
+        except Exception as e:
+            print(f"Backup operation skipped/failed: {str(e)}")
 
 def init_db():
-    """Yeh function application startup par local SQLite disk aur Supabase server par saare core tables check aur sync karta hai."""
-    import streamlit as st
-    
-    primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    conn = sqlite3.connect(primary_db_name)
+    execute_database_daily_backup() # 🔥 First execution checkpoint triggers backup save
+    conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
     cursor = conn.cursor()
-    
-    # Core system operational tables schemas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
@@ -240,103 +244,47 @@ def init_db():
         CREATE TABLE IF NOT EXISTS global_market_prices (
             symbol TEXT PRIMARY KEY, closing_price REAL, updated_at TEXT
         )''')
+        
+    # 🔥 MULTI-MAPPING UPGRADE LAYER: Creating a separate mapping database table safely inside open connection
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sub_broker_mappings (
-            client_name TEXT, sub_broker_tag TEXT, timestamp TEXT, PRIMARY KEY (client_name, sub_broker_tag)
-        )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS cash_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, tx_type TEXT, amount REAL, remarks TEXT, timestamp TEXT
-        )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS operational_weeks (
-            week_name TEXT PRIMARY KEY, timestamp TEXT
-        )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS master_clients (
-            client_name TEXT PRIMARY KEY, timestamp TEXT
+            client_name TEXT,
+            sub_broker_tag TEXT,
+            timestamp TEXT,
+            PRIMARY KEY (client_name, sub_broker_tag)
         )''')
         
-    current_laptop_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    default_blocks = ["15-19 June, 2026", "22-26 June, 2026", "29 June-3 July, 2026", "27-31 July, 2026"]
-    for block in default_blocks:
-        cursor.execute("INSERT OR IGNORE INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (block, current_laptop_time))
-        
-    cursor.execute("SELECT COUNT(*) FROM master_clients")
-    if cursor.fetchone() == 0:
-        default_clients = ['Pj Nse', 'Pj Mcx', 'Pj Sgx', 'DG001', 'Dg002', 'Dg003', 'RG', 'Master 2', 'Jitneder', 'Tony']
-        for client in default_clients:
-            cursor.execute("INSERT OR IGNORE INTO master_clients (client_name, timestamp) VALUES (?, ?)", (client, current_laptop_time))
-            
-    conn.commit()
-    conn.close()
-
-    # Automatically pull trades onto local application storage stream from cloud database server on startup
+    # Automatic historical data migration matrix rule
     try:
-        pull_trades_from_supabase()
-    except Exception as e:
-        print(f"Cloud load bypass: {str(e)}")
+        cursor.execute("PRAGMA table_info(master_clients)")
+        columns_mc = [c[1] for c in cursor.fetchall()]
+        if "sub_broker_tag" in columns_mc:
+            cursor.execute("SELECT client_name, sub_broker_tag, timestamp FROM master_clients WHERE sub_broker_tag IS NOT NULL AND sub_broker_tag != 'None'")
+            old_rows = cursor.fetchall()
+            for c_n, sb_t, t_s in old_rows:
+                cursor.execute("INSERT OR IGNORE INTO sub_broker_mappings (client_name, sub_broker_tag, timestamp) VALUES (?, ?, ?)", (c_n, sb_t, t_s))
+    except Exception as err:
+        print(f"Migration skipped: {str(err)}")
         
-    # 🔥 AUTOMATED REAL-TIME SILENT SYNC BACKGROUND CHECK: 
-    # Yeh laptop se pure database ko background me bina kisi manual function ya bade codes ko compress kiye sync rakhta h
     try:
-        execute_silent_background_sync()
-    except Exception as e:
-        print(f"Background mirror sync delay: {str(e)}")
+        cursor.execute("SELECT client_name, expiry_default FROM client_settings")
+        settings_rows = cursor.fetchall()
+        for c_profile, def_exp in settings_rows:
+            if def_exp and str(def_exp).strip():
+                cursor.execute("""
+                    UPDATE trades 
+                    SET selected_expiry = ? 
+                    WHERE client_name = ? 
+                    AND (selected_expiry IS NULL OR selected_expiry = '' OR selected_expiry = 'None' OR selected_expiry = '()')
+                """, (str(def_exp).strip(), c_profile))
+    except Exception as e: print(f"Database alignment skipped: {str(e)}")
 
-def execute_silent_background_sync():
-    """Yeh local laptop computer disk file se pure dataset chunks ko fetch karke cloud registry server par parallel override sync rakhta hai."""
-    primary_db_name = 'salasar_wealth_v19_ultimate.db'
-    if os.path.exists(primary_db_name):
-        conn = sqlite3.connect(primary_db_name)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM trades")
-        local_rows = cursor.fetchall()
-        conn.close()
-        
-        if local_rows:
-            compiled_list = []
-            for row in local_rows:
-                compiled_list.append({
-                    "client_name": str(row["client_name"]), "week_block": str(row["week_block"]), "exchange": str(row["exchange"]),
-                    "script_name": str(row["script_name"]), "selected_expiry": str(row["selected_expiry"]), "action_type": str(row["action_type"]),
-                    "buy_qty": int(row["buy_qty"]), "buy_price": float(row["buy_price"]), "sell_qty": int(row["sell_qty"]), "sell_price": float(row["sell_price"]),
-                    "turnover": float(row["turnover"]), "brokerage": float(row["brokerage"]), "manual_pnl": float(row["manual_pnl"]), "status": str(row["status"]),
-                    "timestamp": str(row["timestamp"])
-                })
-            
-            # Master synchronization via bulk upsert injection payload strings
-            url = f"{SUPABASE_URL}/mannat_trades"
-            bulk_headers = headers.copy()
-            bulk_headers["Prefer"] = "resolution=merge-duplicates"
-            
-            # Simple direct transmission call string logs
-            requests.post(url, json=compiled_list, headers=bulk_headers, timeout=15)
-
-def pull_trades_from_supabase():
-    """Live production server se saare historical trades ko fetch karke local Streamlit layer me populate karta hai."""
-    url = f"{SUPABASE_URL}/mannat_trades?select=*"
-    try:
-        response = requests.get(url, headers=headers, timeout=12)
-        if response.status_code == 200:
-            records_list = response.json()
-            if records_list:
-                conn = sqlite3.connect('salasar_wealth_v19_ultimate.db')
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM trades")
-                
-                for r in records_list:
-                    cursor.execute("""
-                        INSERT INTO trades (client_name, week_block, exchange, script_name, selected_expiry, action_type, buy_qty, buy_price, sell_qty, sell_price, turnover, brokerage, manual_pnl, status, timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (r['client_name'], r['week_block'], r['exchange'], r['script_name'], r['selected_expiry'], r['action_type'], int(r['buy_qty']), float(r['buy_price']), int(r['sell_qty']), float(r['sell_price']), float(r['turnover']), float(r['brokerage']), float(r['manual_pnl']), r['status'], r['timestamp']))
-                conn.commit()
-                conn.close()
-                return True
-    except Exception as e:
-        print(f"Supabase synchronization failed: {str(e)}")
-    return False
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN brokerage_type TEXT DEFAULT 'Per Crore'")
+    except: pass
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN per_lot_rate REAL DEFAULT 0.0")
+    except: pass
+    try: cursor.execute("ALTER TABLE client_settings ADD COLUMN whatsapp_phone TEXT DEFAULT ''")
+    except: pass
 # ==========================================
 # [PART_3_END]
 # ==========================================
@@ -1454,12 +1402,10 @@ if uploaded_excel_report is not None:
 # [PART_17_END]
 # ==========================================
 # ==========================================
-# [PART_18_START] - Live Database Injection Layer (Supabase Cloud Matrix Connected)
+# [PART_18_START] - Live Database Injection Layer (Duplicate Skip Prompts Fixed)
 # ==========================================
                     conn_sync = sqlite3.connect('salasar_wealth_v19_ultimate.db')
                     cursor_sync = conn_sync.cursor()
-                    
-                    # Local DB write layout mapping parameters
                     if trade_direction == "BUY":
                         cursor_sync.execute("""
                             INSERT INTO trades (client_name, week_block, exchange, script_name, selected_expiry, action_type, buy_qty, buy_price, sell_qty, sell_price, turnover, brokerage, manual_pnl, status, timestamp)
@@ -1472,28 +1418,19 @@ if uploaded_excel_report is not None:
                         """, (active_client, st.session_state['active_block'], current_exchange_header, current_scrip_header, current_expiry_header, trade_volume_qty, trade_execution_price, calculated_turnover, trade_brokerage_cost, actual_captured_timestamp))
                     conn_sync.commit()
                     conn_sync.close()
-                    
-                    # 🔥 LIVE CLOUD PIPELINE TRIGGER: Excel scan hote hi data background me Supabase par real-time save hoga
-                    excel_row_payload = {
-                        "client_name": active_client, "week_block": st.session_state['active_block'], "exchange": current_exchange_header,
-                        "script_name": current_scrip_header, "selected_expiry": current_expiry_header, "action_type": trade_direction,
-                        "buy_qty": trade_volume_qty if trade_direction == "BUY" else 0, "buy_price": trade_execution_price if trade_direction == "BUY" else 0.0,
-                        "sell_qty": trade_volume_qty if trade_direction == "SELL" else 0, "sell_price": trade_execution_price if trade_direction == "SELL" else 0.0,
-                        "turnover": calculated_turnover, "brokerage": trade_brokerage_cost, "manual_pnl": 0.0, "status": "CARRY FORWARD", "timestamp": actual_captured_timestamp
-                    }
-                    push_single_trade_to_supabase(excel_row_payload)
                     inserted_rows_count += 1
                 except Exception:
                     continue
                     
+            # Safe Fallback to initialize variables if they get flushed from earlier runtime scope blocks
             if 'skipped_rows_count' not in locals(): skipped_rows_count = 0
             if 'inserted_rows_count' not in locals(): inserted_rows_count = 0
                     
             if inserted_rows_count > 0:
-                st.success(f"✨ Perfect bhai! Safe Mode Engine ne aapki Excel sheet direct Cloud Database par sync kar di hai. Total {inserted_rows_count} trades securely register ho gaye hain.")
+                st.success(f"✨ Perfect bhai! Safe Mode Engine ne aapki Excel sheet sync kar di hai. Total {inserted_rows_count} naye trades safely register kiye gaye, aur {skipped_rows_count} duplicates block skip ho gaye.")
                 st.rerun()
             elif skipped_rows_count > 0:
-                st.info(f"ℹ️ Is Excel file ke saare {skipped_rows_count} records exact Date-Time matching se pehle se hi saved hain! No double entries.")
+                st.info(f"ℹ️ Is Excel file ke saare {skipped_rows_count} records exact Date-Time matching se pehle se database cockpit me saved hain! No double entries written.")
             else:
                 st.info("ℹ️ Data process ho chuka hai.")
         except Exception as err: 
@@ -1505,11 +1442,12 @@ st.write("---")
 # ==========================================
 
 # ==========================================
-# [PART_19_START] - Smart Calendar Sync Engine & Layout Setup (Supabase Form Hooked)
+# [PART_19_START] - Smart Calendar Sync Engine & Layout Setup (100% BOUNDARY CRASH FIX)
 # ==========================================
 if 'active_block' not in st.session_state or st.session_state.get('global_week_selector_fixed') is None:
     default_week_idx = 0
     try:
+        # Laptop ki live exact exact date pick karein
         current_date_obj = datetime.strptime(get_laptop_time(), "%Y-%m-%d %H:%M:%S").date()
         current_year_str = str(current_date_obj.year)
         
@@ -1517,46 +1455,70 @@ if 'active_block' not in st.session_state or st.session_state.get('global_week_s
             "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, 
             "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
         }
+        
+        # Symmetrical match score mechanism to trace optimal active week block
         best_match_idx = 0
         min_date_distance = 99999
         
         for idx, week_str in enumerate(week_options):
             clean_week_line = str(week_str).lower().strip()
-            if current_year_str not in clean_week_line: continue
+            
+            # Agar string me chal rha year nhi h to parsing skip krein
+            if current_year_str not in clean_week_line:
+                continue
                 
+            # Month tags extract karne ki solid parsing matrix
             detected_months = []
             for month_key, month_val in months_lookup_dict.items():
                 if month_key in clean_week_line:
+                    # Jis sequence me months text me aayenge unhe save karenge
                     detected_months.append((clean_week_line.find(month_key), month_val))
             
+            # Sort detected months by their position in string appearance
             detected_months.sort()
+            month_sequence = [m[1] for m in detected_months]
+            
+            # Extraction of pure digit tokens
             import re
             digit_tokens = [int(s) for s in re.findall(r'\d+', clean_week_line) if int(s) < 32]
             
-            if len(digit_tokens) >= 2 and len(detected_months) > 0:
+            if len(digit_tokens) >= 2 and len(month_sequence) > 0:
+                start_day_digit = digit_tokens[0]
+                end_day_digit = digit_tokens[1]
+                
+                start_month_num = month_sequence[0]
+                # Cross-month handling layer (e.g. "29 June - 3 July")
+                end_month_num = month_sequence[1] if len(month_sequence) > 1 else month_sequence[0]
+                
                 try:
-                    week_start_boundary = datetime(current_date_obj.year, detected_months[0][1], digit_tokens[0]).date()
-                    week_end_boundary = datetime(current_date_obj.year, detected_months[-1][1] if len(detected_months)>1 else detected_months[0][1], digit_tokens[1]).date()
+                    week_start_boundary = datetime(current_date_obj.year, start_month_num, start_day_digit).date()
+                    week_end_boundary = datetime(current_date_obj.year, end_month_num, end_day_digit).date()
                     
+                    # Buffer extensions to perfectly cover weekends alignment adjustments
                     extended_start = week_start_boundary - timedelta(days=2)
                     extended_end = week_end_boundary + timedelta(days=2)
                     
+                    # 🔥 LIVE AUTOMATIC CURRENT WEEK CAPTURE DETECTOR
                     if extended_start <= current_date_obj <= extended_end:
                         default_week_idx = idx
                         break
                         
+                    # Target fallback: find the mathematically closest week block index
                     mid_week_point = week_start_boundary + timedelta(days=2)
                     day_delta_distance = abs((current_date_obj - mid_week_point).days)
                     if day_delta_distance < min_date_distance:
                         min_date_distance = day_delta_distance
                         best_match_idx = idx
-                except: continue
+                except Exception:
+                    continue
         else:
+            # Match condition fallback matrix trigger
             default_week_idx = best_match_idx
+            
     except Exception:
         default_week_idx = 0
         
-    st.session_state['active_block'] = week_options[default_week_idx] if default_week_idx < len(week_options) else week_options
+    st.session_state['active_block'] = week_options[default_week_idx] if default_week_idx < len(week_options) else week_options[0]
 else:
     default_week_idx = week_options.index(st.session_state['active_block']) if st.session_state['active_block'] in week_options else 0
 
@@ -1570,9 +1532,9 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["⚡ Post New Trades", "💵 Cash 
 with tab1:
     st.subheader("📝 Searchable Order Entry Form (Fast Entry Memory Lock Active)")
     if 't_cl_fixed_matrix_key' not in st.session_state: st.session_state['t_cl_fixed_matrix_key'] = active_client
-    if 'last_selected_exchange' not in st.session_state: st.session_state['last_selected_exchange'] = EXCHANGES if EXCHANGES else "NSE"
+    if 'last_selected_exchange' not in st.session_state: st.session_state['last_selected_exchange'] = EXCHANGES[0] if EXCHANGES else "NSE"
     if 'last_entered_script' not in st.session_state: st.session_state['last_entered_script'] = "nifty"
-    if 'last_selected_expiry' not in st.session_state: st.session_state['last_selected_expiry'] = expiry_options if expiry_options else ""
+    if 'last_selected_expiry' not in st.session_state: st.session_state['last_selected_expiry'] = expiry_options[0] if expiry_options else ""
     if 'last_selected_action' not in st.session_state: st.session_state['last_selected_action'] = "BUY"
 
     def sync_form_to_sidebar(): st.session_state['sb_cl_selector_final_matrix'] = st.session_state['t_cl_fixed_matrix_key']
