@@ -196,7 +196,7 @@ st.markdown("""
 # [PART_2_END]
 # ==========================================
 # ==========================================
-# [PART_3_START] - Supabase Cloud Vault Production Database Integration
+# [PART_3_START] - Supabase Cloud Vault Production Database Integration (ANTI-COMPRESSION SHIELD)
 # ==========================================
 import requests
 import json
@@ -206,7 +206,7 @@ from datetime import datetime
 
 # 🔒 SECURE LIVE CREDENTIALS FOR MANNAT WEALTH PRODUCTION STORAGE
 SUPABASE_URL = "https://supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6cmpxeHRiYnl2bXd6cXl2em8iLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc0MDU0MTIzNCwiZXhwIjoyMDU2MTE3MjM0fQ.v_2AeyX1x6uO_3eWshm_Fw6I6_Ww2T0eRjSe_MannatV20"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInRefI6Ind6cmpxeHRiYnl2bXd6cXl2em8iLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc0MDU0MTIzNCwiZXhwIjoyMDU2MTE3MjM0fQ.v_2AeyX1x6uO_3eWshm_Fw6I6_Ww2T0eRjSe_MannatV20"
 
 headers = {
     "apikey": SUPABASE_KEY,
@@ -223,7 +223,7 @@ def init_db():
     conn = sqlite3.connect(primary_db_name)
     cursor = conn.cursor()
     
-    # 🔥 CRITICAL EXPLICIT SCHEMAS: Initialize all framework-specific structural tables to prevent operational crash banners
+    # Core system operational tables schemas
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, exchange TEXT, script_name TEXT,
@@ -248,8 +248,6 @@ def init_db():
         CREATE TABLE IF NOT EXISTS cash_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT, client_name TEXT, week_block TEXT, tx_type TEXT, amount REAL, remarks TEXT, timestamp TEXT
         )''')
-        
-    # 🔥 FIXED CODE EXPLICIT INITIALIZATION GATEWAY: Added missing tables to fix screen errors
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS operational_weeks (
             week_name TEXT PRIMARY KEY, timestamp TEXT
@@ -259,14 +257,13 @@ def init_db():
             client_name TEXT PRIMARY KEY, timestamp TEXT
         )''')
         
-    # Pre-fill structural operational elements cleanly if they are empty
     current_laptop_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     default_blocks = ["15-19 June, 2026", "22-26 June, 2026", "29 June-3 July, 2026", "27-31 July, 2026"]
     for block in default_blocks:
         cursor.execute("INSERT OR IGNORE INTO operational_weeks (week_name, timestamp) VALUES (?, ?)", (block, current_laptop_time))
         
     cursor.execute("SELECT COUNT(*) FROM master_clients")
-    if cursor.fetchone()[0] == 0:
+    if cursor.fetchone() == 0:
         default_clients = ['Pj Nse', 'Pj Mcx', 'Pj Sgx', 'DG001', 'Dg002', 'Dg003', 'RG', 'Master 2', 'Jitneder', 'Tony']
         for client in default_clients:
             cursor.execute("INSERT OR IGNORE INTO master_clients (client_name, timestamp) VALUES (?, ?)", (client, current_laptop_time))
@@ -274,36 +271,48 @@ def init_db():
     conn.commit()
     conn.close()
 
-    # Automatically pull records from live supabase network cluster vault on reload loop
+    # Automatically pull trades onto local application storage stream from cloud database server on startup
     try:
         pull_trades_from_supabase()
     except Exception as e:
-        print(f"Initial cloud seed bridge bypassed: {str(e)}")
-
-def push_single_trade_to_supabase(trade_row_dict):
-    """Jab bhi aap mobile ya laptop se entry karenge, yeh instantly Supabase cloud database me record safe kar dega."""
+        print(f"Cloud load bypass: {str(e)}")
+        
+    # 🔥 AUTOMATED REAL-TIME SILENT SYNC BACKGROUND CHECK: 
+    # Yeh laptop se pure database ko background me bina kisi manual function ya bade codes ko compress kiye sync rakhta h
     try:
-        url = f"{SUPABASE_URL}/mannat_trades"
-        payload = {
-            "client_name": str(trade_row_dict.get("client_name", "")),
-            "week_block": str(trade_row_dict.get("week_block", "")),
-            "exchange": str(trade_row_dict.get("exchange", "")),
-            "script_name": str(trade_row_dict.get("script_name", "")),
-            "selected_expiry": str(trade_row_dict.get("selected_expiry", "")),
-            "action_type": str(trade_row_dict.get("action_type", "")),
-            "buy_qty": int(trade_row_dict.get("buy_qty", 0)),
-            "buy_price": float(trade_row_dict.get("buy_price", 0.0)),
-            "sell_qty": int(trade_row_dict.get("sell_qty", 0)),
-            "sell_price": float(trade_row_dict.get("sell_price", 0.0)),
-            "turnover": float(trade_row_dict.get("turnover", 0.0)),
-            "brokerage": float(trade_row_dict.get("brokerage", 0.0)),
-            "manual_pnl": float(trade_row_dict.get("manual_pnl", 0.0)),
-            "status": str(trade_row_dict.get("status", "CARRY FORWARD")),
-            "timestamp": str(trade_row_dict.get("timestamp", ""))
-        }
-        requests.post(url, json=payload, headers=headers, timeout=10)
+        execute_silent_background_sync()
     except Exception as e:
-        print(f"Supabase background write bypassed: {str(e)}")
+        print(f"Background mirror sync delay: {str(e)}")
+
+def execute_silent_background_sync():
+    """Yeh local laptop computer disk file se pure dataset chunks ko fetch karke cloud registry server par parallel override sync rakhta hai."""
+    primary_db_name = 'salasar_wealth_v19_ultimate.db'
+    if os.path.exists(primary_db_name):
+        conn = sqlite3.connect(primary_db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM trades")
+        local_rows = cursor.fetchall()
+        conn.close()
+        
+        if local_rows:
+            compiled_list = []
+            for row in local_rows:
+                compiled_list.append({
+                    "client_name": str(row["client_name"]), "week_block": str(row["week_block"]), "exchange": str(row["exchange"]),
+                    "script_name": str(row["script_name"]), "selected_expiry": str(row["selected_expiry"]), "action_type": str(row["action_type"]),
+                    "buy_qty": int(row["buy_qty"]), "buy_price": float(row["buy_price"]), "sell_qty": int(row["sell_qty"]), "sell_price": float(row["sell_price"]),
+                    "turnover": float(row["turnover"]), "brokerage": float(row["brokerage"]), "manual_pnl": float(row["manual_pnl"]), "status": str(row["status"]),
+                    "timestamp": str(row["timestamp"])
+                })
+            
+            # Master synchronization via bulk upsert injection payload strings
+            url = f"{SUPABASE_URL}/mannat_trades"
+            bulk_headers = headers.copy()
+            bulk_headers["Prefer"] = "resolution=merge-duplicates"
+            
+            # Simple direct transmission call string logs
+            requests.post(url, json=compiled_list, headers=bulk_headers, timeout=15)
 
 def pull_trades_from_supabase():
     """Live production server se saare historical trades ko fetch karke local Streamlit layer me populate karta hai."""
